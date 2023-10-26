@@ -1,4 +1,5 @@
 
+import asyncio
 from logging import Logger
 import orjson
 from poke_env import ShowdownException
@@ -60,45 +61,75 @@ class Engine:
         await self.sendMessageToSocket(self.opponentSocket, "/accept %s" % self.agentPlayer.username)
         await self.parseBattle(self.agentSocket, True)
         await self.parseBattle(self.opponentSocket, False)
+        if(self.agentBattle is None): print(self.agentPlayer.username, "NO BATTLE!!!")
+
         
 
     async def parseBattle(self, socket: websockets.WebSocketClientProtocol, isAgent: bool, isSubsequent: bool = False):
         battleParsed = False
-        async for message in socket:
-            print(message)
-            print()
+        # async for message in socket:
+        while True:
+            # message = socket.read_message()
+            message = None
+            try:
+                message = await asyncio.wait_for(socket.recv(), timeout=0.15)
+            except:
+                break
+            # print(self.agentPlayer.username, message)
+            # print()
             # pipe-separated sequences
             messageSplit = message.split("|")
             # ignore all other messages
             if(messageSplit[0].startswith(">battle")):
+                if(messageSplit[1].startswith("error")):
+                    print(self.agentPlayer.username, isAgent, message)
                 await self._handle_battle_message(message, isAgent)
 
                 # the final two messages are a request and opponent player info
-                if(messageSplit[1] == "request" and messageSplit[2] != ""): 
-                    battleParsed = True
-                    if(isSubsequent): return
-                if(messageSplit[1] == "player" and battleParsed):
-                    return
+                # if(messageSplit[1] == "request" and messageSplit[2] != ""): 
+                #     battleParsed = True
+                #     if(isSubsequent): return
+                # if(messageSplit[1] == "player" and battleParsed):
+                #     return
+        try:
+            print(self.agentPlayer.username, self.agentBattle.active_pokemon)
+            print(self.opponentPlayer.username, self.opponentBattle.active_pokemon)
+        except:
+            pass
 
     async def doAction(self, action: BattleOrder) -> Battle:
         agentMsg = action.message
-
-        opponentMsg = self.opponentStrategy.choose_action(self.opponentBattle)
-        opponentMsg = opponentMsg.message
+        print(self.agentPlayer.username, "will send:", agentMsg)
 
         # send decisions
         roomId = self.agentBattle.battle_tag
         await self.sendMessageToSocket(self.agentSocket, agentMsg, roomId)
-        await self.sendMessageToSocket(self.opponentSocket, opponentMsg, roomId)
-        print("sent msg")
-        # environment update - THIS REQUIRES TESTING, no idea what sequence of messages received
         await self.parseBattle(self.agentSocket, True, True)
         await self.parseBattle(self.opponentSocket, False, True)
-        print("got msg")
 
-        print(self.opponentBattle.active_pokemon)
-        print(self.agentBattle.active_pokemon)
+        # if the opponent needs to wait then skip their turn
+        if self.opponentBattle._wait == False:
+            opponentMsg = self.opponentStrategy.choose_action(self.opponentBattle)
+            opponentMsg = opponentMsg.message
+            print("Opponent will send:", opponentMsg)
+            await self.sendMessageToSocket(self.opponentSocket, opponentMsg, roomId)
+            await self.parseBattle(self.agentSocket, True, True)
+            await self.parseBattle(self.opponentSocket, False, True)
+        else:
+            print("YOOOO THIS HAPPENED 1")
 
+
+        # if the agent needs to wait then the opponent must act again for the next state
+        if self.agentBattle._wait == True:
+            print("YOOOO THIS HAPPENED 2")
+            opponentMsg = self.opponentStrategy.choose_action(self.opponentBattle)
+            opponentMsg = opponentMsg.message
+            await self.sendMessageToSocket(self.opponentSocket, opponentMsg, roomId)
+            await self.parseBattle(self.agentSocket, True, True)
+            await self.parseBattle(self.opponentSocket, False, True)
+
+        # print(self.opponentBattle.active_pokemon)
+        # print(self.agentBattle.active_pokemon)
         return self.agentBattle
 
 
@@ -111,7 +142,7 @@ class Engine:
         url          = {https://github.com/hsahovic/poke-env}
     }
     '''
-    async def _handle_battle_message(self, message: str, isAgentBattle: bool = True) -> None:  # pragma: no cover
+    async def _handle_battle_message(self, message: str, isAgentBattle: bool) -> None:  # pragma: no cover
         # Battle messages can be multiline
         split_messages = [m.split("|") for m in message.split("\n")]
         battle: Battle = None

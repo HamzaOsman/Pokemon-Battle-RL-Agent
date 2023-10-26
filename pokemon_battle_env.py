@@ -16,8 +16,9 @@ from player_model import PlayerModel
 #     return pokemon.
 
 class PokemonBattleEnv(gymnasium.Env):
-    def __init__(self):
+    def __init__(self, envNum: int):
         self.engine: Engine = None
+        self.envNum = envNum
         boostSpace = Dict({
             "accuracy": Discrete(13, start=-6),
             "atk": Discrete(13, start=-6), # -6 -> 6
@@ -78,28 +79,29 @@ class PokemonBattleEnv(gymnasium.Env):
         if self.engine is not None:
             self.engine.agentSocket.close()
             self.engine.opponentSocket.close()
-
-        self.engine = Engine(PlayerModel("agent"), PlayerModel("opponent"))
+        envNumStr = str(self.envNum)
+        self.engine = Engine(PlayerModel("agent"+envNumStr), PlayerModel("opponent"+envNumStr))
         await self.engine.start()
-        print(self.engine)
         return self._buildObservation()
 
         
     async def step(self, action: BattleOrder):
         await self.engine.doAction(action)
-        print("made it pas action")
         observation = self._buildObservation()
         reward = self._determineReward()
+        return observation, reward, self.engine.agentBattle.won is not None, False, None
 
-        return observation, reward, self.engine.agentBattle.won, False, None
 
-
-    def render(self):
-        print(self.engine.agentBattle.active_pokemon)
+    def render(self): pass
+        # print(self.engine.agentBattle.active_pokemon)
     
     def _createMove(self, move: Move):
+        file = open("./data/type_nums.json", 'r')
+        # Parse the JSON data and load it into a Python dictionary
+        typeNums = json.load(file)
         return {
-            "type": move.type.value, # fire, water, etc
+            # fire, water, etc curse has ??? type, which is unhandled by poke_env
+            "type": typeNums[move.entry["type"].title()], 
             "category": move.category.value, # physical, special, status
             "pp": move.current_pp,
             "power": move.base_power,

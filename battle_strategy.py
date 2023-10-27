@@ -16,4 +16,6 @@ class RandomStrategy(BattleStrategy):
         possibleOrders.extend(
             [BattleOrder(switch) for switch in battle.available_switches]
         )
-        return possibleOrders[int(random.random() * len(possibleOrders))]
+        i = int(random.random() * len(possibleOrders))
+        # print(i, len(possibleOrders))
+        return possibleOrders[i]

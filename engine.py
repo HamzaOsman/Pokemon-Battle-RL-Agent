@@ -17,6 +17,7 @@ from player_model import PlayerModel
 # engine which manages the battle
 class Engine:
     battleFormat: str = "gen3randombattle"
+    # battleFormat: str = "gen3ou"
 
     def __init__(self, agent: PlayerModel, opponent: PlayerModel, opponentStrategy: BattleStrategy = RandomStrategy):
         self.agentBattle: Battle = None
@@ -59,74 +60,71 @@ class Engine:
         await self.sendMessageToSocket(self.agentSocket, f"/challenge {self.opponentPlayer.username}, {Engine.battleFormat}") #gen3ou?
         await self.waitUntilChallenge(self.opponentSocket)
         await self.sendMessageToSocket(self.opponentSocket, "/accept %s" % self.agentPlayer.username)
-        await self.parseBattle(self.agentSocket, True)
-        await self.parseBattle(self.opponentSocket, False)
+        await self.parseInitialBattle(self.agentSocket, True)
+        await self.parseInitialBattle(self.opponentSocket, False)
         if(self.agentBattle is None): print(self.agentPlayer.username, "NO BATTLE!!!")
 
-        
-
-    async def parseBattle(self, socket: websockets.WebSocketClientProtocol, isAgent: bool, isSubsequent: bool = False):
-        battleParsed = False
-        # async for message in socket:
+    async def parseInitialBattle(self, socket: websockets.WebSocketClientProtocol, isAgent: bool):
         while True:
-            # message = socket.read_message()
-            message = None
-            try:
-                message = await asyncio.wait_for(socket.recv(), timeout=0.15)
-            except:
-                break
-            # print(self.agentPlayer.username, message)
-            # print()
-            # pipe-separated sequences
+            message = await socket.recv()
             messageSplit = message.split("|")
+
+            # ignore all other messages
+            if(messageSplit[0].startswith(">battle")):
+                if(messageSplit[1].startswith("error")):
+                    print(self.agentPlayer.username, message)
+
+                self._handle_battle_message(message, isAgent)
+                # opponent is p2, they will be displayed last
+                if(messageSplit[1] == "player" and self.opponentPlayer.username in message):
+                    return
+
+    async def parseBattle(self, socket: websockets.WebSocketClientProtocol, isAgent: bool):
+        for i in range(2):
+            message = await socket.recv()
+            messageSplit = message.split("|")
+
             # ignore all other messages
             if(messageSplit[0].startswith(">battle")):
                 if(messageSplit[1].startswith("error")):
                     print(self.agentPlayer.username, isAgent, message)
-                await self._handle_battle_message(message, isAgent)
-
-                # the final two messages are a request and opponent player info
-                # if(messageSplit[1] == "request" and messageSplit[2] != ""): 
-                #     battleParsed = True
-                #     if(isSubsequent): return
-                # if(messageSplit[1] == "player" and battleParsed):
-                #     return
-        try:
-            print(self.agentPlayer.username, self.agentBattle.active_pokemon)
-            print(self.opponentPlayer.username, self.opponentBattle.active_pokemon)
-        except:
-            pass
+                skipNextMsg = self._handle_battle_message(message, isAgent)
+                if(skipNextMsg):
+                    return
+                
 
     async def doAction(self, action: BattleOrder) -> Battle:
-        agentMsg = action.message
-        print(self.agentPlayer.username, "will send:", agentMsg)
-
-        # send decisions
         roomId = self.agentBattle.battle_tag
-        await self.sendMessageToSocket(self.agentSocket, agentMsg, roomId)
-        await self.parseBattle(self.agentSocket, True, True)
-        await self.parseBattle(self.opponentSocket, False, True)
 
-        # if the opponent needs to wait then skip their turn
+        # agent acts right away
+        agentMsg = action.message
+        if(self.agentBattle.trapped):
+            print(self.agentPlayer.username, "is trapped and wants to use", agentMsg)
+        await self.sendMessageToSocket(self.agentSocket, agentMsg, roomId)
+        # print(self.agentPlayer.username, "sent", agentMsg)
+
+        # the opponent only goes if it is not waiting
         if self.opponentBattle._wait == False:
             opponentMsg = self.opponentStrategy.choose_action(self.opponentBattle)
             opponentMsg = opponentMsg.message
-            print("Opponent will send:", opponentMsg)
             await self.sendMessageToSocket(self.opponentSocket, opponentMsg, roomId)
-            await self.parseBattle(self.agentSocket, True, True)
-            await self.parseBattle(self.opponentSocket, False, True)
-        else:
-            print("YOOOO THIS HAPPENED 1")
+            # print(self.opponentPlayer.username, "sent", agentMsg)
 
-
-        # if the agent needs to wait then the opponent must act again for the next state
-        if self.agentBattle._wait == True:
-            print("YOOOO THIS HAPPENED 2")
+        # parse the result 
+        # print(self.agentPlayer.username, "before!")
+        await self.parseBattle(self.opponentSocket, False)
+        # print(self.agentPlayer.username, "betweee!")
+        await self.parseBattle(self.agentSocket, True)
+        # print(self.agentPlayer.username, "after!")
+        # if the agent needs to wait then the opponent must move again (i.e. to send out a replacement pokemon)
+        while(self.agentBattle._wait and self.agentBattle.won is None):
             opponentMsg = self.opponentStrategy.choose_action(self.opponentBattle)
             opponentMsg = opponentMsg.message
             await self.sendMessageToSocket(self.opponentSocket, opponentMsg, roomId)
-            await self.parseBattle(self.agentSocket, True, True)
-            await self.parseBattle(self.opponentSocket, False, True)
+            print(self.opponentPlayer.username, "sent on wait:", opponentMsg)
+            await self.parseBattle(self.opponentSocket, False)
+            await self.parseBattle(self.agentSocket, True)
+            print("past")
 
         # print(self.opponentBattle.active_pokemon)
         # print(self.agentBattle.active_pokemon)
@@ -142,7 +140,7 @@ class Engine:
         url          = {https://github.com/hsahovic/poke-env}
     }
     '''
-    async def _handle_battle_message(self, message: str, isAgentBattle: bool) -> None:  # pragma: no cover
+    def _handle_battle_message(self, message: str, isAgentBattle: bool) -> None:  # pragma: no cover
         # Battle messages can be multiline
         split_messages = [m.split("|") for m in message.split("\n")]
         battle: Battle = None
@@ -152,7 +150,7 @@ class Engine:
             and split_messages[1][1] == "init"
         ):
             battle_info = split_messages[0][0].split("-")
-            battle = await self._create_battle(battle_info)
+            battle = self._create_battle(battle_info)
         else:
             battle = self.agentBattle if isAgentBattle else self.opponentBattle
 
@@ -168,17 +166,29 @@ class Engine:
                     battle._won_by(split_message[2])
                 else:
                     battle._tied()
+                return True
             elif split_message[1] in {"", "t:", "expire", "uhtmlchange"}:
                 pass
+            elif split_message[1] == "error" and (split_message[2].startswith(
+                    "[Unavailable choice] Can't switch: The active Pokémon is "
+                    "trapped"
+                ) or split_message[2].startswith(
+                    "[Invalid choice] Can't switch: The active Pokémon is trapped"
+                )):
+                    battle.trapped = True
+                    print("trapped set")
+                    return True
             else:
                 battle._parse_message(split_message)
         if isAgentBattle:
             self.agentBattle = battle
         else:
             self.opponentBattle = battle
+        
+        return False
 
         
-    async def _create_battle(self, split_message: List[str]) -> Battle:
+    def _create_battle(self, split_message: List[str]) -> Battle:
         """Returns battle object corresponding to received message.
 
         :param split_message: The battle initialisation message.

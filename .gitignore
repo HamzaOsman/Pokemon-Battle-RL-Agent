@@ -1,4 +1,6 @@
 # Byte-compiled / optimized / DLL files
+showdown-master/env
+pokemon-showdown/
 __pycache__/
 *.py[cod]
 *$py.class

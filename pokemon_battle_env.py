@@ -80,15 +80,14 @@ class PokemonBattleEnv(gymnasium.Env):
             self.engine.agentSocket.close()
             self.engine.opponentSocket.close()
         envNumStr = str(self.envNum)
-        teamstr1= '''
-Monika (Dugtrio) (F) @ Choice Band
+        teamstr1= '''Monika (Dugtrio) (F) @ Choice Band
 Ability: Arena Trap
 EVs: 4 HP / 252 Atk / 252 Spe
 Adamant Nature
 - Earthquake
 - Rock Slide
 - Aerial Ace
-- Hidden Power [Bug]
+- Dig
 
 Jesse Pinkman (Claydol) @ Leftovers
 Ability: Levitate
@@ -106,10 +105,9 @@ Careful Nature
 - Spikes
 - Roar
 - Toxic
-- Drill Peck
-        '''
-        teamstr2 = '''
-Skylar White (Blissey) (F) @ Leftovers
+- Drill Peck'''
+
+        teamstr2 = '''Skylar White (Blissey) (F) @ Leftovers
 Ability: Natural Cure
 EVs: 44 HP / 252 Def / 212 SpA
 Bold Nature
@@ -135,9 +133,8 @@ Naive Nature
 - Dragon Dance
 - Rock Slide
 - Earthquake
-- Ice Beam
-        '''
-        self.engine = Engine(PlayerModel("agent"+envNumStr), PlayerModel("opponent"+envNumStr))
+- Ice Beam'''
+        self.engine = Engine(PlayerModel("agent"+envNumStr, teamstr1), PlayerModel("opponent"+envNumStr, teamstr2))
         await self.engine.start()
         return self._buildObservation()
 
@@ -146,7 +143,7 @@ Naive Nature
         await self.engine.doAction(action)
         observation = self._buildObservation()
         reward = self._determineReward()
-        return observation, reward, (self.engine.agentBattle.won is not None), False, None
+        return observation, reward, self.engine.agentBattle._finished, False, None
 
 
     def render(self): pass

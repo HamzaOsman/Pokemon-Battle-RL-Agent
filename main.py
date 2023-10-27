@@ -18,7 +18,7 @@ async def main():
     # but this code does work concurrently, and i do seem to have solved the most scenarios caused by the agent/opponent
     # acting when they shouldnt
 
-    tasks = [fullRun(i) for i in range(10)]
+    tasks = [fullRun(i) for i in range(100)]
 
     # Use asyncio.gather to await all tasks at once
     await asyncio.gather(*tasks)

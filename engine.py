@@ -16,8 +16,8 @@ from player_model import PlayerModel
 
 # engine which manages the battle
 class Engine:
-    battleFormat: str = "gen3randombattle"
-    # battleFormat: str = "gen3ou"
+    # battleFormat: str = "gen3randombattle"
+    battleFormat: str = "gen3ou"
 
     def __init__(self, agent: PlayerModel, opponent: PlayerModel, opponentStrategy: BattleStrategy = RandomStrategy):
         self.agentBattle: Battle = None
@@ -25,6 +25,9 @@ class Engine:
         self.agentPlayer = agent 
         self.opponentPlayer = opponent
         self.opponentStrategy = opponentStrategy
+
+        # if the agent made a move but it was invalid the opponent needs to be aware
+        self.isMakeupMove = False
 
     async def start(self):
         websocketUrl = "ws://localhost:8000/showdown/websocket"
@@ -50,6 +53,7 @@ class Engine:
         await self.sendMessageToSocket(socket, f"/trn {player.username},0,")
 
     async def _setTeam(self, player: PlayerModel, socket: websockets.WebSocketClientProtocol):
+        # print("setting team:", "/utm %s" % player.team)
         await self.sendMessageToSocket(socket, "/utm %s" % player.team)
 
     async def _startBattle(self):
@@ -58,8 +62,10 @@ class Engine:
         await self._setTeam(self.opponentPlayer, self.opponentSocket)
 
         await self.sendMessageToSocket(self.agentSocket, f"/challenge {self.opponentPlayer.username}, {Engine.battleFormat}") #gen3ou?
+
         await self.waitUntilChallenge(self.opponentSocket)
         await self.sendMessageToSocket(self.opponentSocket, "/accept %s" % self.agentPlayer.username)
+
         await self.parseInitialBattle(self.agentSocket, True)
         await self.parseInitialBattle(self.opponentSocket, False)
         if(self.agentBattle is None): print(self.agentPlayer.username, "NO BATTLE!!!")
@@ -80,51 +86,92 @@ class Engine:
                     return
 
     async def parseBattle(self, socket: websockets.WebSocketClientProtocol, isAgent: bool):
-        for i in range(2):
+        moveMade = True
+        i = 0
+        while i < 2:
             message = await socket.recv()
             messageSplit = message.split("|")
-
+            # print(isAgent, message)
+            # print()
             # ignore all other messages
             if(messageSplit[0].startswith(">battle")):
+                i += 1
                 if(messageSplit[1].startswith("error")):
-                    print(self.agentPlayer.username, isAgent, message)
+                    moveMade = False
+                    # print(self.agentPlayer.username, isAgent, message)
                 skipNextMsg = self._handle_battle_message(message, isAgent)
                 if(skipNextMsg):
-                    return
+                    break
+        return moveMade
                 
+                
+    # async def doActionNew(self, action: BattleOrder) -> Battle:
+    #     roomId = self.agentBattle.battle_tag
+
+    #     agentMsg = action.message
+
+    #     opponentMsg = self.opponentStrategy.choose_action(self.opponentBattle)
+    #     opponentMsg = opponentMsg.message
+
+    #     task1 = asyncio.create_task(self.sendMessageToSocket(self.agentSocket, agentMsg, roomId))
+    #     task2 = asyncio.create_task(self.sendMessageToSocket(self.opponentSocket, opponentMsg, roomId))
+        
+    #     # agent and opponent send their message together
+    #     await asyncio.gather((task1, task2))
+
+    #     # agent and opponent wait for results
+    #     task1 = asyncio.create_task(self.parseBattle(self.agentSocket, True))
+    #     task2 = asyncio.create_task(self.parseBattle(self.opponentSocket, False))
+
+    #     complete, incomplete = await asyncio.wait((task1, task2), return_when=asyncio.FIRST_COMPLETED)
+
+    #     for task in complete:
+    #         if task.result:
+    #             await 
+
+
 
     async def doAction(self, action: BattleOrder) -> Battle:
         roomId = self.agentBattle.battle_tag
 
         # agent acts right away
         agentMsg = action.message
-        if(self.agentBattle.trapped):
-            print(self.agentPlayer.username, "is trapped and wants to use", agentMsg)
+        # if(self.agentBattle.trapped):
+        #     print(self.agentPlayer.username, "is trapped and wants to use", agentMsg)
         await self.sendMessageToSocket(self.agentSocket, agentMsg, roomId)
         # print(self.agentPlayer.username, "sent", agentMsg)
 
+        # if the agent is making up for failure to move last time then the opponent does not go 
         # the opponent only goes if it is not waiting
-        if self.opponentBattle._wait == False:
+        if not self.isMakeupMove and self.opponentBattle._wait == False:
             opponentMsg = self.opponentStrategy.choose_action(self.opponentBattle)
             opponentMsg = opponentMsg.message
             await self.sendMessageToSocket(self.opponentSocket, opponentMsg, roomId)
-            # print(self.opponentPlayer.username, "sent", agentMsg)
+            # print(self.opponentPlayer.username, "sent", opponentMsg)
 
         # parse the result 
         # print(self.agentPlayer.username, "before!")
-        await self.parseBattle(self.opponentSocket, False)
+        oMadeMove = await self.parseBattle(self.opponentSocket, False)
         # print(self.agentPlayer.username, "betweee!")
-        await self.parseBattle(self.agentSocket, True)
+        if(oMadeMove):
+            self.isMakeupMove = not await self.parseBattle(self.agentSocket, True)
         # print(self.agentPlayer.username, "after!")
-        # if the agent needs to wait then the opponent must move again (i.e. to send out a replacement pokemon)
-        while(self.agentBattle._wait and self.agentBattle.won is None):
+
+        # print("opponent moved:", oMadeMove)
+        # print("agent moved:", not self.isMakeupMove)
+
+        # if the opponent made an invalid move or the agent needs to wait then the opponent must move again
+        # (opponent tried to switch when trapped)
+        # (agent must wait for opponent to send out a replacement pokemon)
+
+        while((not oMadeMove or self.agentBattle._wait) and not self.agentBattle._finished):
             opponentMsg = self.opponentStrategy.choose_action(self.opponentBattle)
             opponentMsg = opponentMsg.message
             await self.sendMessageToSocket(self.opponentSocket, opponentMsg, roomId)
-            print(self.opponentPlayer.username, "sent on wait:", opponentMsg)
-            await self.parseBattle(self.opponentSocket, False)
+            # print(self.opponentPlayer.username, "sent on wait:", opponentMsg)
+            oMadeMove = await self.parseBattle(self.opponentSocket, False)
             await self.parseBattle(self.agentSocket, True)
-            print("past")
+            # print("past")
 
         # print(self.opponentBattle.active_pokemon)
         # print(self.agentBattle.active_pokemon)
@@ -154,6 +201,8 @@ class Engine:
         else:
             battle = self.agentBattle if isAgentBattle else self.opponentBattle
 
+
+        battle.trapped = False
         for split_message in split_messages[1:]:
             if len(split_message) <= 1:
                 continue
@@ -176,8 +225,7 @@ class Engine:
                     "[Invalid choice] Can't switch: The active Pokémon is trapped"
                 )):
                     battle.trapped = True
-                    print("trapped set")
-                    return True
+                    # print("trapped set")
             else:
                 battle._parse_message(split_message)
         if isAgentBattle:

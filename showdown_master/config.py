@@ -72,7 +72,7 @@ class _ShowdownConfig:
         self.battle_bot_module = env("BATTLE_BOT")
         self.websocket_uri = env("WEBSOCKET_URI")
         self.username = env("PS_USERNAME")
-        self.password = env("PS_PASSWORD")
+        self.password = env("PS_PASSWORD", None)
         self.bot_mode = env("BOT_MODE")
         self.pokemon_mode = env("POKEMON_MODE")
 

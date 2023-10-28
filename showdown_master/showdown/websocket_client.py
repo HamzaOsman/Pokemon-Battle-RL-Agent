@@ -72,18 +72,10 @@ class PSWebsocketClient:
                     'challstr': "|".join([client_id, challstr])
                 }
             )
-
         else:
-            response = requests.post(
-                self.login_uri,
-                data={
-                    'act': 'getassertion',
-                    'userid': self.username,
-                    'challstr': '|'.join([client_id, challstr]),
-                }
-            )
+            logger.debug("Bypassing authentication request")
 
-        if response.status_code == 200:
+        if self.password is None or response.status_code == 200:
             if self.password:
                 response_json = json.loads(response.text[1:])
                 if not response_json['actionsuccess']:
@@ -92,7 +84,7 @@ class PSWebsocketClient:
 
                 assertion = response_json.get('assertion')
             else:
-                assertion = response.text
+                assertion = ""
 
             message = ["/trn " + self.username + ",0," + assertion]
             logger.debug("Successfully logged in")

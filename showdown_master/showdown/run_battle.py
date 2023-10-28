@@ -179,7 +179,6 @@ async def start_battle(ps_websocket_client, pokemon_battle_type):
 
 async def pokemon_battle(ps_websocket_client, pokemon_battle_type):
     battle = await start_battle(ps_websocket_client, pokemon_battle_type)
-    # battle, info = await env.reset()
     while True:
         msg = await ps_websocket_client.receive_message()
         if battle_is_finished(battle.battle_tag, msg):
@@ -196,9 +195,3 @@ async def pokemon_battle(ps_websocket_client, pokemon_battle_type):
             if action_required and not battle.wait:
                 best_move = await async_pick_move(battle)
                 await ps_websocket_client.send_message(battle.battle_tag, best_move)
-
-
-        # action = await async_pick_move(battle)
-        # observation, reward, terminated, t, i = await env.step(action)
-        # if (terminated):
-        #     return winner

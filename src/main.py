@@ -10,7 +10,6 @@ async def main():
     # group together the tasks for building the battles and wait
     tasks = [buildBattle(i) for i in range(100)]
     results = await asyncio.gather(*tasks)
-
     # then group together the actual battles and wait
     tasks = []
     for result in results:

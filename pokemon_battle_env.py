@@ -2,23 +2,17 @@ import json
 import gymnasium as gymnasium
 from gymnasium.spaces import * 
 from poke_env.player import BattleOrder
-
 from engine import Engine
-
-from poke_env.environment.battle import Battle
-from poke_env.environment.pokemon import Pokemon
 from poke_env.environment.move import Move
-
-from player_model import PlayerModel
 
 
 # def pokemonSpecies(pokemon: Pokemon):
 #     return pokemon.
 
 class PokemonBattleEnv(gymnasium.Env):
-    def __init__(self, envNum: int):
-        self.engine: Engine = None
-        self.envNum = envNum
+    def __init__(self, engine: Engine):
+        self.engine = engine
+
         boostSpace = Dict({
             "accuracy": Discrete(13, start=-6),
             "atk": Discrete(13, start=-6), # -6 -> 6
@@ -76,66 +70,10 @@ class PokemonBattleEnv(gymnasium.Env):
 
     async def reset(self, seed=None):
         super().reset(seed=seed)
-        if self.engine is not None:
-            self.engine.agentSocket.close()
-            self.engine.opponentSocket.close()
-        envNumStr = str(self.envNum)
-        teamstr1= '''Monika (Dugtrio) (F) @ Choice Band
-Ability: Arena Trap
-EVs: 4 HP / 252 Atk / 252 Spe
-Adamant Nature
-- Earthquake
-- Rock Slide
-- Aerial Ace
-- Dig
+        # if self.engine.socket is not None:
+        #     await self.engine.socket.close()
 
-Jesse Pinkman (Claydol) @ Leftovers
-Ability: Levitate
-EVs: 252 HP / 240 Atk / 16 Def
-Adamant Nature
-- Earthquake
-- Shadow Ball
-- Rapid Spin
-- Explosion
-
-Walter White (Skarmory) (M) @ Leftovers
-Ability: Keen Eye
-EVs: 252 HP / 4 Def / 252 SpD
-Careful Nature
-- Spikes
-- Roar
-- Toxic
-- Drill Peck'''
-
-        teamstr2 = '''Skylar White (Blissey) (F) @ Leftovers
-Ability: Natural Cure
-EVs: 44 HP / 252 Def / 212 SpA
-Bold Nature
-IVs: 2 Atk / 30 SpA
-- Soft-Boiled
-- Wish
-- Ice Beam
-- Hidden Power [Grass]
-
-Bluetooth Speaker (Metagross) @ Choice Band
-Ability: Clear Body
-EVs: 252 Atk / 176 Def / 80 SpD
-Adamant Nature
-- Meteor Mash
-- Earthquake
-- Rock Slide
-- Explosion
-
-Meth in Weed (Tyranitar) (M) @ Leftovers
-Ability: Sand Stream
-EVs: 244 Atk / 12 SpA / 252 Spe
-Naive Nature
-- Dragon Dance
-- Rock Slide
-- Earthquake
-- Ice Beam'''
-        self.engine = Engine(PlayerModel("agent"+envNumStr, teamstr1), PlayerModel("opponent"+envNumStr, teamstr2))
-        await self.engine.start()
+        await self.engine.startBattle()
         return self._buildObservation()
 
         
@@ -143,11 +81,11 @@ Naive Nature
         await self.engine.doAction(action)
         observation = self._buildObservation()
         reward = self._determineReward()
-        return observation, reward, self.engine.agentBattle._finished, False, None
+        return observation, reward, self.engine.battle._finished, False, None
 
 
     def render(self): pass
-        # print(self.engine.agentBattle.active_pokemon)
+        # print(self.engine.battle.active_pokemon)
     
     def _createMove(self, move: Move):
         file = open("./data/type_nums.json", 'r')
@@ -163,7 +101,7 @@ Naive Nature
         }
 
     def _buildObservation(self):
-        battleState = self.engine.agentBattle
+        battleState = self.engine.battle
 
         friendlyPokemon = []
         for name, pokemon in battleState.team.items():
@@ -204,9 +142,9 @@ Naive Nature
         }
         
     def _determineReward(self):
-        if self.engine.agentBattle.won is None:
+        if self.engine.battle.won is None:
             return 0
-        elif self.engine.agentBattle.won:
+        elif self.engine.battle.won:
             return 1
         else:
             return -1

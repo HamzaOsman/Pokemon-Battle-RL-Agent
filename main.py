@@ -1,43 +1,103 @@
 import asyncio
 import time
-from battle_strategy import RandomStrategy
+from agent import Agent
 from engine import Engine
-from player_model import PlayerModel
 from pokemon_battle_env import PokemonBattleEnv
-from player_model import PlayerModel
-from poke_env import PlayerConfiguration
 
 async def main():
     start_time = time.time()
 
-    # Theory: errors regarding moves being made when theyre not supposed to are actually caused by race conditions
-    # the more concurrent agents the heavier the strain on this app and the server
-    # which means its possible for the socket timeout to occur before all of the battle data has actually been read in
+    # group together the tasks for building the battles and wait
+    tasks = [buildBattle(i) for i in range(100)]
+    results = await asyncio.gather(*tasks)
 
-    # Additionally there are still errors, particularly when a pokemon is trapped.
-    # but this code does work concurrently, and i do seem to have solved the most scenarios caused by the agent/opponent
-    # acting when they shouldnt
+    # then group together the actual battles and wait
+    tasks = []
+    for result in results:
+        tasks += result
 
-    tasks = [fullRun(i) for i in range(100)]
-
-    # Use asyncio.gather to await all tasks at once
-    await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks)
+    
 
     print(f"Elapsed time:", time.time()-start_time, "s")
 
-async def fullRun(i):
-    env = PokemonBattleEnv(i)
-    await env.reset()
+async def buildBattle(i: int):
+    teamstr1= '''Monika (Dugtrio) (F) @ Choice Band
+Ability: Arena Trap
+EVs: 4 HP / 252 Atk / 252 Spe
+Adamant Nature
+- Earthquake
+- Rock Slide
+- Aerial Ace
+- Dig
+
+Jesse Pinkman (Claydol) @ Leftovers
+Ability: Levitate
+EVs: 252 HP / 240 Atk / 16 Def
+Adamant Nature
+- Earthquake
+- Shadow Ball
+- Rapid Spin
+- Explosion
+
+Walter White (Skarmory) (M) @ Leftovers
+Ability: Keen Eye
+EVs: 252 HP / 4 Def / 252 SpD
+Careful Nature
+- Spikes
+- Roar
+- Toxic
+- Drill Peck'''
+
+    teamstr2 = '''Skylar White (Blissey) (F) @ Leftovers
+Ability: Natural Cure
+EVs: 44 HP / 252 Def / 212 SpA
+Bold Nature
+IVs: 2 Atk / 30 SpA
+- Soft-Boiled
+- Wish
+- Ice Beam
+- Hidden Power [Grass]
+
+Bluetooth Speaker (Metagross) @ Choice Band
+Ability: Clear Body
+EVs: 252 Atk / 176 Def / 80 SpD
+Adamant Nature
+- Meteor Mash
+- Earthquake
+- Rock Slide
+- Explosion
+
+Meth in Weed (Tyranitar) (M) @ Leftovers
+Ability: Sand Stream
+EVs: 244 Atk / 12 SpA / 252 Spe
+Naive Nature
+- Dragon Dance
+- Rock Slide
+- Earthquake
+- Ice Beam'''
+
+    agent = Agent(f"agent{i}", True, teamstr1)
+    opponent = Agent(f"opponent{i}", False, teamstr2)
+    agentEngine = Engine(agent, opponent.username)
+    opponentEngine = Engine(opponent, agent.username)
+    await agentEngine.init()
+    await opponentEngine.init()
+
+    tasks = [runAgent(agentEngine), runAgent(opponentEngine)]
+    return tasks
+
+async def runAgent(engine: Engine):
+    env = PokemonBattleEnv(engine)
+    observation = await env.reset()
     reward = 0
     while True:
-        randoAction = RandomStrategy.choose_action(env.engine.agentBattle)
+        randoAction = engine.agent.choose_action(env.engine.battle)
         observation, reward, terminated, t, i = await env.step(randoAction)
         if terminated: break
-    print(reward)
-    
-    await env.engine.agentSocket.close()
-    await env.engine.opponentSocket.close()
+    # print(reward)
 
+    await env.engine.socket.close()
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(main())

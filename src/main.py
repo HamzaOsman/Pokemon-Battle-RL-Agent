@@ -35,61 +35,12 @@ async def mainSynchronous():
     await opponentSocket.close()
 
 async def buildBattle(i: int, isSeparate: bool = True, agentSocket: websockets.WebSocketClientProtocol = None, opponentSocket: websockets.WebSocketClientProtocol = None):
-    teamstr1= '''Monika (Dugtrio) (F) @ Choice Band
-Ability: Arena Trap
-EVs: 4 HP / 252 Atk / 252 Spe
-Adamant Nature
-- Earthquake
-- Rock Slide
-- Aerial Ace
-- Dig
+    with open('teams/team1.txt') as f:
+        teamstr1 = f.read()
 
-Jesse Pinkman (Claydol) @ Leftovers
-Ability: Levitate
-EVs: 252 HP / 240 Atk / 16 Def
-Adamant Nature
-- Earthquake
-- Shadow Ball
-- Rapid Spin
-- Explosion
-
-Walter White (Skarmory) (M) @ Leftovers
-Ability: Keen Eye
-EVs: 252 HP / 4 Def / 252 SpD
-Careful Nature
-- Spikes
-- Roar
-- Toxic
-- Drill Peck'''
-
-    teamstr2 = '''Skylar White (Blissey) (F) @ Leftovers
-Ability: Natural Cure
-EVs: 44 HP / 252 Def / 212 SpA
-Bold Nature
-IVs: 2 Atk / 30 SpA
-- Soft-Boiled
-- Wish
-- Ice Beam
-- Hidden Power [Grass]
-
-Bluetooth Speaker (Metagross) @ Choice Band
-Ability: Clear Body
-EVs: 252 Atk / 176 Def / 80 SpD
-Adamant Nature
-- Meteor Mash
-- Earthquake
-- Rock Slide
-- Explosion
-
-Meth in Weed (Tyranitar) (M) @ Leftovers
-Ability: Sand Stream
-EVs: 244 Atk / 12 SpA / 252 Spe
-Naive Nature
-- Dragon Dance
-- Rock Slide
-- Earthquake
-- Ice Beam'''
-    
+    with open('teams/team2.txt') as f:
+        teamstr2 = f.read()
+        
     agentUsername = "agent"
     opponentUsername = "opponent"
     if isSeparate:

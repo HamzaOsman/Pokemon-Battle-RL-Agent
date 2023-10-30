@@ -1,0 +1,27 @@
+Blissey (F) @ Leftovers
+Ability: Natural Cure
+EVs: 44 HP / 252 Def / 212 SpA
+Bold Nature
+IVs: 2 Atk / 30 SpA
+- Soft-Boiled
+- Wish
+- Ice Beam
+- Hidden Power [Grass]
+
+Metagross @ Choice Band
+Ability: Clear Body
+EVs: 252 Atk / 176 Def / 80 SpD
+Adamant Nature
+- Meteor Mash
+- Earthquake
+- Rock Slide
+- Explosion
+
+Tyranitar (M) @ Leftovers
+Ability: Sand Stream
+EVs: 244 Atk / 12 SpA / 252 Spe
+Naive Nature
+- Dragon Dance
+- Rock Slide
+- Earthquake
+- Ice Beam

@@ -102,8 +102,8 @@ Naive Nature
     agentEngine = Engine(agent, opponent.username, agentSocket)
     opponentEngine = Engine(opponent, agent.username, opponentSocket)
 
-    await agentEngine.init(isSeparate)
-    await opponentEngine.init(isSeparate)
+    await agentEngine.init(i == 0 or isSeparate)
+    await opponentEngine.init(i == 0 or isSeparate)
 
     tasks = [runAgent(agentEngine, agentSocket is None), runAgent(opponentEngine, opponentSocket is None)]
     return tasks
@@ -122,7 +122,7 @@ async def runAgent(engine: Engine, closeSocket: bool = True):
 
 if __name__ == "__main__":
     start_time = time.time()
-    asyncio.get_event_loop().run_until_complete(main())
+    asyncio.get_event_loop().run_until_complete(mainSynchronous())
     print(f"Elapsed time:", time.time()-start_time, "s")
 
 

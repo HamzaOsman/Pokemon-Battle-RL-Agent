@@ -16,16 +16,18 @@ class Engine:
     # battleFormat: str = "gen3randombattle"
     battleFormat: str = "gen3ou"
 
-    def __init__(self, agent: Agent, opponentUsername: str):
+    def __init__(self, agent: Agent, opponentUsername: str, socket: websockets.WebSocketClientProtocol = None):
         self.battle: Battle = None
         self.agent = agent
         self.opponentUsername = opponentUsername
-        self.socket = None
+        self.socket = socket
 
-    async def init(self):
+    async def init(self, logPlayerIn: bool):
         websocketUrl = "ws://localhost:8000/showdown/websocket"
-        self.socket = await websockets.connect(websocketUrl)
-        await self._logPlayerIn()
+        if self.socket is None:
+            self.socket =  await websockets.connect(websocketUrl)
+        if logPlayerIn:
+            await self._logPlayerIn()
         
     async def _waitUntilChallenge(self):
         async for message in self.socket:
@@ -59,12 +61,16 @@ class Engine:
         print("battle started!")
 
     async def parseInitialBattle(self):
+        isInit = False
         while True:
             message = await self.socket.recv()
             messageSplit = message.split("|")
-
-            # ignore all other messages
-            if(messageSplit[0].startswith(">battle")):
+            isInit = messageSplit[1] == "init" or isInit
+            # if not isInit:
+            #     print("this is not init:")
+            #     print(message)
+            # ignore non battle messages, and anything else in the socket before the initialization
+            if(messageSplit[0].startswith(">battle") and isInit):
                 # if(messageSplit[1].startswith("error")):
                 #     print(self.agent.username, message)
                 self._handle_battle_message(message)
@@ -80,10 +86,10 @@ class Engine:
         while i < 2:
             message = await self.socket.recv()
             messageSplit = message.split("|")
-            # print(self.agent.username, message)
+            # print(self.agent.username, messageSplit)
             # print()
-            # ignore all other messages
-            if(messageSplit[0].startswith(">battle")):
+            # ignore non battle messages, and info about spectators looking at battles
+            if(messageSplit[0].startswith(">battle") and messageSplit[1] not in {"j", "l"}):
                 i += 1
                 # if(messageSplit[1].startswith("error")):
                 #     print(self.battle.active_pokemon, ") invalid move made!", self.agent.username, message)

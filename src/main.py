@@ -1,15 +1,16 @@
 import asyncio
 import time
+
+import websockets
 from agent import Agent
 from engine import Engine
 from pokemon_battle_env import PokemonBattleEnv
 
 async def main():
-    start_time = time.time()
-
     # group together the tasks for building the battles and wait
-    tasks = [buildBattle(i) for i in range(100)]
+    tasks = [buildBattle(i) for i in range(1000)]
     results = await asyncio.gather(*tasks)
+
     # then group together the actual battles and wait
     tasks = []
     for result in results:
@@ -18,9 +19,22 @@ async def main():
     results = await asyncio.gather(*tasks)
     
 
-    print(f"Elapsed time:", time.time()-start_time, "s")
+async def mainSynchronous():
+    websocketUrl = "ws://localhost:8000/showdown/websocket"
+    agentSocket =  await websockets.connect(websocketUrl)
+    opponentSocket =  await websockets.connect(websocketUrl)
+    print("connection went fine")
+    # wait for each battle to complete
+    for i in range(1000):
+        battleTasks = await buildBattle(i, False, agentSocket, opponentSocket)
+        print("making battles fine")
+        await asyncio.gather(*battleTasks)
+        print("battles completed fine")
+    
+    await agentSocket.close()
+    await opponentSocket.close()
 
-async def buildBattle(i: int):
+async def buildBattle(i: int, isSeparate: bool = True, agentSocket: websockets.WebSocketClientProtocol = None, opponentSocket: websockets.WebSocketClientProtocol = None):
     teamstr1= '''Monika (Dugtrio) (F) @ Choice Band
 Ability: Arena Trap
 EVs: 4 HP / 252 Atk / 252 Spe
@@ -75,18 +89,26 @@ Naive Nature
 - Rock Slide
 - Earthquake
 - Ice Beam'''
+    
+    agentUsername = "agent"
+    opponentUsername = "opponent"
+    if isSeparate:
+        agentUsername += str(i)
+        opponentUsername += str(i)
+    
+    agent = Agent(agentUsername, True, teamstr1)
+    opponent = Agent(opponentUsername, False, teamstr2)
 
-    agent = Agent(f"agent{i}", True, teamstr1)
-    opponent = Agent(f"opponent{i}", False, teamstr2)
-    agentEngine = Engine(agent, opponent.username)
-    opponentEngine = Engine(opponent, agent.username)
-    await agentEngine.init()
-    await opponentEngine.init()
+    agentEngine = Engine(agent, opponent.username, agentSocket)
+    opponentEngine = Engine(opponent, agent.username, opponentSocket)
 
-    tasks = [runAgent(agentEngine), runAgent(opponentEngine)]
+    await agentEngine.init(isSeparate)
+    await opponentEngine.init(isSeparate)
+
+    tasks = [runAgent(agentEngine, agentSocket is None), runAgent(opponentEngine, opponentSocket is None)]
     return tasks
 
-async def runAgent(engine: Engine):
+async def runAgent(engine: Engine, closeSocket: bool = True):
     env = PokemonBattleEnv(engine)
     observation = await env.reset()
     reward = 0
@@ -95,9 +117,12 @@ async def runAgent(engine: Engine):
         observation, reward, terminated, t, i = await env.step(randoAction)
         if terminated: break
     # print(reward)
-
-    await env.engine.socket.close()
+    if closeSocket:
+        await env.engine.socket.close()
 
 if __name__ == "__main__":
+    start_time = time.time()
     asyncio.get_event_loop().run_until_complete(main())
+    print(f"Elapsed time:", time.time()-start_time, "s")
+
 

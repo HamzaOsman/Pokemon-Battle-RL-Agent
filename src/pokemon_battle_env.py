@@ -1,10 +1,10 @@
 import json
 import gymnasium as gymnasium
 from gymnasium.spaces import * 
-from poke_env.player import BattleOrder
+from poke_env.player import BattleOrder, DefaultBattleOrder
 from engine import Engine
 from poke_env.environment.move import Move
-
+import numpy as np
 
 # def pokemonSpecies(pokemon: Pokemon):
 #     return pokemon.
@@ -64,8 +64,7 @@ class PokemonBattleEnv(gymnasium.Env):
             })
         })
 
-        # so what im thinking is that initially this will be probably like 6, but hopefully at the end of the step function we can update it?
-        self.action_space = Discrete(6)
+        self.action_space = Discrete(6+1) # +1 representing defaultAction (struggle) when no other actions are valid 
         self.reward_range = (-1, 1)
 
     async def reset(self, seed=None):
@@ -76,14 +75,39 @@ class PokemonBattleEnv(gymnasium.Env):
         await self.engine.startBattle()
         return self._buildObservation()
 
-        
-    async def step(self, action: BattleOrder):
-        await self.engine.doAction(action)
+    async def step(self, action):
+        battleOrder = self._action_to_battleOrder(action)
+        await self.engine.doAction(battleOrder)
         observation = self._buildObservation()
         reward = self._determineReward()
         return observation, reward, self.engine.battle._finished, False, None
+    
+    def _action_to_battleOrder(self, action):
+        if (0 < action < 5):
+            return BattleOrder(self.engine.battle.available_moves[action-1])
+        elif (4 < action < 7):
+            return BattleOrder(self.engine.battle.available_switches[action-5])
+        else:
+            return DefaultBattleOrder()
+        
+    def valid_action_space_mask(self):
+        """
+        :return: Mask for valid moves used by agent to pick an action
+        """
+        action_mask = np.zeros(7, np.int8)
+        if (len(self.engine.battle.available_moves) > 0):
+            action_mask[1:len(self.engine.battle.available_moves)+1] = 1
+        else:
+            # no valid moves so add defaultBattleOrder (struggle)
+            action_mask[0] = 1
+        if (len(self.engine.battle.available_switches) > 0):
+            action_mask[5:len(self.engine.battle.available_switches)+5] = 1
 
+        # ex: [0, 1,1,0,0, 1,0] => can make available moves #1, #2, or available switch #1
+        # ex: [1, 0,0,0,0, 1,0] => can make defaultMove (struggle), or available switch #1
 
+        return action_mask
+    
     def render(self): pass
         # print(self.engine.battle.active_pokemon)
     
@@ -99,6 +123,8 @@ class PokemonBattleEnv(gymnasium.Env):
             "power": move.base_power,
             "accuracy": move.accuracy
         }
+    
+
 
     def _buildObservation(self):
         battleState = self.engine.battle

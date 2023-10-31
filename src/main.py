@@ -64,7 +64,7 @@ async def runAgent(engine: Engine, closeSocket: bool = True):
     observation = await env.reset()
     reward = 0
     while True:
-        randoAction = engine.agent.choose_action(env.engine.battle)
+        randoAction = env.action_space.sample(env.valid_action_space_mask())
         observation, reward, terminated, t, i = await env.step(randoAction)
         if terminated: break
     # print(reward)

@@ -27,9 +27,8 @@ async def mainSynchronous():
     # wait for each battle to complete
     for i in range(1000):
         battleTasks = await buildBattle(i, False, agentSocket, opponentSocket)
-        print("making battles fine")
         await asyncio.gather(*battleTasks)
-        print("battles completed fine")
+        print(f"Battle {i+1} completed")
     
     await agentSocket.close()
     await opponentSocket.close()
@@ -40,7 +39,7 @@ async def buildBattle(i: int, isSeparate: bool = True, agentSocket: websockets.W
 
     with open('teams/team2.txt') as f:
         teamstr2 = f.read()
-        
+
     agentUsername = "agent"
     opponentUsername = "opponent"
     if isSeparate:
@@ -67,7 +66,7 @@ async def runAgent(engine: Engine, closeSocket: bool = True):
         randoAction = engine.agent.choose_action(env.engine.battle)
         observation, reward, terminated, t, i = await env.step(randoAction)
         if terminated: break
-    # print(reward)
+
     if closeSocket:
         await env.engine.socket.close()
 

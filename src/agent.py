@@ -8,15 +8,3 @@ class Agent():
         self.username = username
         self.isChallenger = isChallenger
         self.team = ConstantTeambuilder(team).yield_team() if team else "null"
-
-    def choose_action(self, battle: Battle) -> BattleOrder:
-        possibleOrders = [BattleOrder(move) for move in battle.available_moves]
-        possibleOrders.extend(
-            [BattleOrder(switch) for switch in battle.available_switches]
-        )
-
-        if len(possibleOrders) > 0:
-            i = int(random.random() * len(possibleOrders))
-            return possibleOrders[i]
-        else:
-            return DefaultBattleOrder()

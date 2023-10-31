@@ -5,12 +5,15 @@ from poke_env.player import BattleOrder, DefaultBattleOrder
 from engine import Engine
 from poke_env.environment.move import Move
 import numpy as np
+import webbrowser
 
 # def pokemonSpecies(pokemon: Pokemon):
 #     return pokemon.
 
 class PokemonBattleEnv(gymnasium.Env):
-    def __init__(self, engine: Engine):
+    metadata = {"render_modes": ["human"]}
+
+    def __init__(self, engine: Engine, render_mode=None):
         self.engine = engine
 
         boostSpace = Dict({
@@ -66,6 +69,9 @@ class PokemonBattleEnv(gymnasium.Env):
 
         self.action_space = Discrete(6+1) # +1 representing defaultAction (struggle) when no other actions are valid 
         self.reward_range = (-1, 1)
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
+        self.render_mode = render_mode
+        self._rendered = False
 
     async def reset(self, seed=None):
         super().reset(seed=seed)
@@ -73,14 +79,21 @@ class PokemonBattleEnv(gymnasium.Env):
         #     await self.engine.socket.close()
 
         await self.engine.startBattle()
-        return self._buildObservation()
+
+        self.render()
+
+        return self._buildObservation(), {}
 
     async def step(self, action):
         battleOrder = self._action_to_battleOrder(action)
         await self.engine.doAction(battleOrder)
+        
         observation = self._buildObservation()
         reward = self._determineReward()
-        return observation, reward, self.engine.battle._finished, False, None
+        
+        self.render()
+        
+        return observation, reward, self.engine.battle._finished, False, {}
     
     def _action_to_battleOrder(self, action):
         if (0 < action < 5):
@@ -108,8 +121,17 @@ class PokemonBattleEnv(gymnasium.Env):
 
         return action_mask
     
-    def render(self): pass
-        # print(self.engine.battle.active_pokemon)
+    def render(self):
+        if (not self.render_mode): 
+            return
+        elif (self.render_mode == "human" and not self._rendered):
+            url = f"http://localhost:8000/{self.engine.battle.battle_tag}"
+            # ONLY UNCOMMENT WHEN # OF EPISODES IS SMALL
+            # webbrowser.open(url) 
+            self._rendered = True
+
+    async def close(self):
+        await self.engine.socket.close()
     
     def _createMove(self, move: Move):
         file = open("./data/type_nums.json", 'r')
@@ -124,8 +146,6 @@ class PokemonBattleEnv(gymnasium.Env):
             "accuracy": move.accuracy
         }
     
-
-
     def _buildObservation(self):
         battleState = self.engine.battle
 

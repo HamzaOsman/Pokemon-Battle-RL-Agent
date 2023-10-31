@@ -110,9 +110,8 @@ class Engine:
        
         # send the agent and possibly the opponents decision to the socket
         await self._sendMessage(agentMsg, roomId)
-        # print(self.agent.username, "sending", agentMsg)
         await self._parseBattle()
-        if self.battle._wait:
+        if self.battle._wait and not self.battle.finished:
             await self._parseBattle()
 
         # print()

@@ -17,11 +17,6 @@ class Agent():
 
         if len(possibleOrders) > 0:
             i = int(random.random() * len(possibleOrders))
-            # print(self.username, i, len(possibleOrders))
-            # print(self.username, i, battle.available_moves)
-            if len(possibleOrders) == 0:
-                print(self.username, i, battle.active_pokemon.moves.keys())
-                print(self.username, i, battle.available_moves)
             return possibleOrders[i]
         else:
             return DefaultBattleOrder()

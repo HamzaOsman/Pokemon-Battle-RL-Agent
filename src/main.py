@@ -7,7 +7,7 @@ from engine import Engine
 from pokemon_battle_env import PokemonBattleEnv
 
 async def main():
-    max_episode = 1000
+    max_episode = 100
 
     # group together the tasks for building the battles and wait
     tasks = [buildEnv(i) for i in range(max_episode)]
@@ -28,7 +28,7 @@ async def mainSynchronous():
 
     environments = await buildEnv(0, False, agentSocket, opponentSocket)
     
-    max_episode = 1000
+    max_episode = 100
 
     tasks = []
     for env in environments:

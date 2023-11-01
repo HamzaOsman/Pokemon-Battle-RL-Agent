@@ -175,7 +175,8 @@ class PokemonBattleEnv(gymnasium.Env):
                         "spe": pokemon.stats["spe"]
                     },
                     "status": pokemon.status.value if (pokemon.status is not None) else 0,
-                    "moves": tuple(self._createMove(value) for value in pokemon.moves.values()) #this is gona be death
+                    "moves": tuple(self._createMove(value) for value in pokemon.moves.values()), #this is gona be death
+                    "id": pokeNums[pokemon.species]
                 }
             else:
                 friendlyPokemon.append({

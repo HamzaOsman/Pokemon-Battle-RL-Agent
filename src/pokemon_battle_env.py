@@ -6,12 +6,13 @@ from engine import Engine
 from poke_env.environment.move import Move
 import numpy as np
 import webbrowser
+import asyncio
 
 # def pokemonSpecies(pokemon: Pokemon):
 #     return pokemon.
 
 class PokemonBattleEnv(gymnasium.Env):
-    metadata = {"render_modes": ["human"]}
+    metadata = {"render_modes": ["human"], "min_rate": 8}
 
     def __init__(self, engine: Engine, render_mode=None):
         self.engine = engine
@@ -82,9 +83,11 @@ class PokemonBattleEnv(gymnasium.Env):
         # if self.engine.socket is not None:
         #     await self.engine.socket.close()
 
+        self._rendered = False
+
         await self.engine.startBattle()
 
-        self.render()
+        await self.render()
 
         return self._buildObservation(), {}
 
@@ -95,7 +98,7 @@ class PokemonBattleEnv(gymnasium.Env):
         observation = self._buildObservation()
         reward = self._determineReward()
         
-        self.render()
+        await self.render()
         
         return observation, reward, self.engine.battle._finished, False, {}
     
@@ -114,8 +117,9 @@ class PokemonBattleEnv(gymnasium.Env):
         action_mask = np.zeros(7, np.int8)
         if (len(self.engine.battle.available_moves) > 0):
             action_mask[1:len(self.engine.battle.available_moves)+1] = 1
-        else:
-            # no valid moves so add defaultBattleOrder (struggle)
+        elif (not self.engine.battle.force_switch):
+            # add defaultBattleOrder (struggle) when no valid moves and not forced to switch
+            # note: might need to add this check before checking available moves if using gen4 and above (for u-turn)
             action_mask[0] = 1
         if (len(self.engine.battle.available_switches) > 0):
             action_mask[5:len(self.engine.battle.available_switches)+5] = 1
@@ -125,7 +129,7 @@ class PokemonBattleEnv(gymnasium.Env):
 
         return action_mask
     
-    def render(self):
+    async def render(self):
         if (not self.render_mode): 
             return
         elif (self.render_mode == "human" and not self._rendered):
@@ -133,6 +137,8 @@ class PokemonBattleEnv(gymnasium.Env):
             # ONLY UNCOMMENT WHEN # OF EPISODES IS SMALL
             # webbrowser.open(url) 
             self._rendered = True
+        
+        await asyncio.sleep(self.metadata["min_rate"])
 
     async def close(self):
         await self.engine.socket.close()

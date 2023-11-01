@@ -58,6 +58,7 @@ async def buildEnv(i: int, isSeparate: bool = True, agentSocket: websockets.WebS
     await agentEngine.init(i == 0 or isSeparate)
     await opponentEngine.init(i == 0 or isSeparate)
 
+    # agentEnv = PokemonBattleEnv(agentEngine, "human")
     agentEnv = PokemonBattleEnv(agentEngine)
     opponentEnv = PokemonBattleEnv(opponentEngine)
 

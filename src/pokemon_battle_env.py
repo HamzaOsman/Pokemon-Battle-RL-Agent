@@ -137,11 +137,13 @@ class PokemonBattleEnv(gymnasium.Env):
 
 
     def _action_to_battleOrder(self, action):
-        if (0 < action < 5):
-            return BattleOrder(self.engine.battle.available_moves[action-1])
+        if (1 < action < 5):
+            # order of values is order of insertion in python
+            return BattleOrder(list(self.engine.battle.active_pokemon.moves.values())[action-1])
         elif (4 < action < 7):
-            return BattleOrder(self.engine.battle.available_switches[action-5])
+            return BattleOrder(self.engine.orderedPartyPokemon[action-5])
         else:
+            # action index 0
             return DefaultBattleOrder()
 
 
@@ -151,16 +153,30 @@ class PokemonBattleEnv(gymnasium.Env):
         """
         action_mask = np.zeros(7, np.int8)
         if (len(self.engine.battle.available_moves) > 0):
-            action_mask[1:len(self.engine.battle.available_moves)+1] = 1
+            # self.engine.battle.available_moves[0]
+            # action_mask[1:len(self.engine.battle.available_moves)+1] = 1
+            # hidden power [grass]
+            # hidden power 
+
+            action_mask[1:5] = [1 if m in self.engine.battle.available_moves else 0 for m in self.engine.battle.active_pokemon.moves.values()]
+
         elif (not self.engine.battle.force_switch):
             # add defaultBattleOrder (struggle) when no valid moves and not forced to switch
             # note: might need to add this check before checking available moves if using gen4 and above (for u-turn)
             action_mask[0] = 1
         if (len(self.engine.battle.available_switches) > 0):
-            action_mask[5:len(self.engine.battle.available_switches)+5] = 1
-
+            action_mask[5:] = [1 if p in self.engine.battle.available_switches else 0 for p in self.engine.orderedPartyPokemon]
+        if self.engine.agent.isChallenger:
+            # moves changes, it seems to be the same as available moves for some reason...
+            print(self.engine.battle.active_pokemon.moves)
+            print(action_mask)
+            print("\n\n")
         # ex: [0, 1,1,0,0, 1,0] => can make available moves #1, #2, or available switch #1
         # ex: [1, 0,0,0,0, 1,0] => can make defaultMove (struggle), or available switch #1
+        # can you have [0, 0,1,1,1, 1,2,3] ? NO
+
+        # ex: [0, 1,0,1,1, 0,1] => can make moves #1, #3, #4, or switch #2
+        # ex: [1, 0,0,0,0, 1,0] => can make defaultMove or switch #1
 
         return action_mask
 
@@ -190,12 +206,21 @@ class PokemonBattleEnv(gymnasium.Env):
 
     def _buildObservation(self):
         battleState = self.engine.battle
+        # if self.engine.agent.isChallenger:
+            
+        #     print("the pokemon order is:")
+        #     for pokemon in [battleState.active_pokemon] + self.engine.orderedPartyPokemon:
+        #         print(pokemon)
+        #         print("their moves are:")
+        #         print(pokemon.moves)
+            
+        #     print("\n\n")
 
         # friendly pokemon
         activeFriendlyPokemon = []
         friendlyPartyPokemon = []
 
-        for name, pokemon in battleState.team.items():
+        for pokemon in [battleState.active_pokemon] + self.engine.orderedPartyPokemon:
             # build friendly pokemon observation
             friendlyPokemon = [
                 PokemonBattleEnv.pokeNums[pokemon.species],
@@ -220,9 +245,9 @@ class PokemonBattleEnv(gymnasium.Env):
                 friendlyPartyPokemon += friendlyPokemon
 
         # observation of enemy's pokemon
+        # TODO: how to get opponents team in order? not that important?
         activeEnemyPokemon = []
         enemyPartyPokemon = []
-
         for name, pokemon in battleState.opponent_team.items():
             # build friendly pokemon observation
             enemyPokemon = [

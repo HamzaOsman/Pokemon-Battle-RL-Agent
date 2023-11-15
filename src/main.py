@@ -28,7 +28,7 @@ async def mainSynchronous():
 
     environments = await buildEnv(0, False, agentSocket, opponentSocket)
     
-    max_episode = 100
+    max_episode = 1
 
     tasks = []
     for env in environments:

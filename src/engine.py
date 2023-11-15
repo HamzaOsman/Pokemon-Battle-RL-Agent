@@ -19,6 +19,7 @@ class Engine:
     def __init__(self, agent: Agent, opponentUsername: str, socket: websockets.WebSocketClientProtocol = None):
         self.battle: Battle = None
         self.agent = agent
+        self.orderedPartyPokemon = []
         self.opponentUsername = opponentUsername
         self.socket = socket
 
@@ -148,8 +149,22 @@ class Engine:
                 continue
             elif split_message[1] == "request":
                 if split_message[2]:
+                    # Since Python 3.7 json.loads preserves dict order by default.
                     request = orjson.loads(split_message[2])
                     battle._parse_request(request)
+                    
+                    side = request["side"]
+                    self.orderedPartyPokemon = []
+                    # comes from pokemon showdown, true order
+                    for pokemon in side["pokemon"]:
+                        if pokemon:
+                            pokemon = battle.team[pokemon["ident"]]
+                            # if self.agent.isChallenger:
+                            #     print("active?", pokemon.active, "fainted?", pokemon.fainted, pokemon.species)
+                            if not pokemon.active:
+                                self.orderedPartyPokemon.append(pokemon)
+                    # print("\n\n")
+
             elif split_message[1] == "win" or split_message[1] == "tie":
                 if split_message[1] == "win":
                     battle._won_by(split_message[2])

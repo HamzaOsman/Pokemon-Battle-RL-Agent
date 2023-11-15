@@ -36,6 +36,7 @@ class Engine:
             messageSplit = message.split("|")
             if(messageSplit[1] == "pm" and messageSplit[4].startswith("/challenge")):
                 return
+        
 
     async def _sendMessage(self, message: str, room: str = ""):
         await self.socket.send("|".join([room, message]))

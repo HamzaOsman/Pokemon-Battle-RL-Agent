@@ -1,82 +1,112 @@
 import json
 import gymnasium as gymnasium
-from gymnasium.spaces import * 
+from gymnasium.spaces import *
 from poke_env.player import BattleOrder, DefaultBattleOrder
 from engine import Engine
 from poke_env.environment.move import Move
+from poke_env.environment.side_condition import SideCondition
 import numpy as np
 import webbrowser
 import asyncio
 
-# def pokemonSpecies(pokemon: Pokemon):
-#     return pokemon.
+# AUTO enum starts at 1
+NONE_TYPE = 0
+NONE_STATUS = 0
+NONE_WEATHER = 0
+NONE_SIDE_CONDITION = 0
+UNKNOWN_TYPE = -1
+UNKNOWN_ID = 0
+UNKNOWN_ABILITY = 0
+UNKNOWN_STAT = 0
+UNKNOWN_CATEGORY = -1
+UNKNOWN_PP = -1
+UNKNOWN_POWER = -1
+UNKNOWN_ACCURACY = 29
 
 class PokemonBattleEnv(gymnasium.Env):
-    metadata = {"render_modes": ["human"], "min_rate": 8}
 
+    metadata = {"render_modes": ["human"], "min_rate": 8}
+    pokeNums = json.load(open("./data/pokemon_nums.json", 'r'))
+    abilityNums = json.load(open("./data/ability_nums.json", 'r'))
+    
     def __init__(self, engine: Engine, render_mode=None):
         self.engine = engine
+        
+        #WIP
+        #Game state
+            # effects
 
-        boostSpace = Dict({
-            "accuracy": Discrete(13, start=-6),
-            "atk": Discrete(13, start=-6), # -6 -> 6
-            "def": Discrete(13, start=-6),
-            "evasion": Discrete(13, start=-6),
-            "spa": Discrete(13, start=-6),
-            "spd": Discrete(13, start=-6),
-            "spe": Discrete(13, start=-6),
-        })
+        # for each pokemon also add
+            # weight
+            # gender
 
-        pokemonMoveSpace = Dict({
-            "type": Discrete(18, start=0), # fire, water, etc
-            "category": Discrete(3,start=0), # physical, special, status
-            "pp": Discrete(65, start=0),
-            "power": Discrete(250, start=0),
-            "accuracy": Discrete(70, start=30)
-        })
+        # for each enemy pokemon also add
+            # Learn exactish values of stats (mainly speed)
 
-        # agent knows all details about each friendly pokemon
-        friendlyPokemonSpace = Dict({
-            "types": Tuple((Discrete(18, start=0), Discrete(18, start=0))),
-            "stats": Dict({
-                "hp": Discrete(1000, start=0),
-                "atk": Discrete(1000, start=0),
-                "def": Discrete(1000, start=0),
-                "spa": Discrete(1000, start=0),
-                "spd": Discrete(1000, start=0),
-                "spe": Discrete(1000, start=0)
-            }),
-            "status": Discrete(8, start=0),
-            "moves": Tuple((pokemonMoveSpace,pokemonMoveSpace,pokemonMoveSpace,pokemonMoveSpace)),
-            "id": Discrete(386, start=1)
-        })
+        move = [
+            Discrete(19, start=UNKNOWN_TYPE),       # Type
+            Discrete(4, start=UNKNOWN_CATEGORY),    # Category (physical, special, status)
+            Discrete(66, start=UNKNOWN_PP),         # PP
+            Discrete(251, start=UNKNOWN_POWER),     # Power
+            Discrete(71, start=UNKNOWN_ACCURACY)    # Accuracy (29 - 100)
+        ]
 
-        # agent knows about the active enemy pokemon
-        enemyPokemonSpace = Dict({
-            "types": Tuple((Discrete(18, start=0), Discrete(18, start=0))),
-            "stats": Dict({
-                "hp": Discrete(1000, start=0),
-            }),
-            "status": Discrete(8, start=0),
-            "boosts": boostSpace,
-            "id": Discrete(386, start=1)
-        })
+        boosts = 7*[Discrete(13, start=-6)] # attack, special attack, defense, special, defense, speed, accuracy, evasiveness
+        
+        friendlyPokemon = [               
+            Discrete(386, start=1), # id
+            Discrete(76, start=1),  # ability
+            Discrete(18, start=0),  # type1
+            Discrete(18, start=0),  # type2
+            Discrete(8, start=0),   # status
+            Discrete(999, start=1), # hp
+            Discrete(999, start=1), # atk
+            Discrete(999, start=1), # def
+            Discrete(999, start=1), # spa
+            Discrete(999, start=1), # spd
+            Discrete(999, start=1)  # spe
+        ] + 4*move
+        
+        activeFriendlyPokemon = boosts + friendlyPokemon
 
-        # agent knows own pokemon, one enemy pokemon, which two pokemon are active ig
-        self.observation_space = Dict({
-            "agentPartyPokemons": Tuple((friendlyPokemonSpace,friendlyPokemonSpace)),
-            "agentActivePokemon": Dict({
-                "Pokemon": friendlyPokemonSpace,
-                "boosts": boostSpace
-            }),
-            "enemyActivePokemon": enemyPokemonSpace
-        })
+        enemyPokemon = [
+            Discrete(386, start=UNKNOWN_ID),       # id, 0 for unknown
+            Discrete(77, start=UNKNOWN_ABILITY),   # ability, 0 for unknown
+            Discrete(19, start=UNKNOWN_TYPE),      # types, -1 for unknown, 0 for no type
+            Discrete(19, start=UNKNOWN_TYPE),
+            Discrete(8, start=0),                  # status
+            Discrete(101, start=0),                # hp percent
+            Discrete(256, start=UNKNOWN_STAT),     # base atk
+            Discrete(256, start=UNKNOWN_STAT),     # base def
+            Discrete(256, start=UNKNOWN_STAT),     # base spa
+            Discrete(256, start=UNKNOWN_STAT),     # base spd
+            Discrete(256, start=UNKNOWN_STAT),     # base spe
+        ] + 4*move
 
-        self.action_space = Discrete(6+1) # +1 representing defaultAction (struggle) when no other actions are valid 
+        sideConditions = [
+            Discrete(5, start=NONE_SIDE_CONDITION), #LIGHT_SCREEN 
+            Discrete(5, start=NONE_SIDE_CONDITION), #MIST
+            Discrete(5, start=NONE_SIDE_CONDITION), #REFLECT
+            Discrete(5, start=NONE_SIDE_CONDITION), #SAFEGUARD 
+            Discrete(4, start=NONE_SIDE_CONDITION)  #SPIKES
+        ] 
+
+        game = [
+            Discrete(10, start=NONE_WEATHER)    # Weather
+        ] + 2*sideConditions
+        
+        activeEnemyPokemon = boosts + enemyPokemon
+        
+        self.observation_space = gymnasium.spaces.Tuple((activeFriendlyPokemon + 2 * friendlyPokemon + activeEnemyPokemon + 2 * enemyPokemon + game))
+        
+        # +1 representing defaultAction (struggle) when no other actions are valid
+        self.action_space = Discrete(6+1)
         self.reward_range = (-1, 1)
+
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self._rendered = False
+
 
     async def reset(self, seed=None):
         super().reset(seed=seed)
@@ -88,20 +118,24 @@ class PokemonBattleEnv(gymnasium.Env):
         await self.engine.startBattle()
 
         await self.render()
-
+        # self.observation_space = self._buildObservation()
         return self._buildObservation(), {}
+
 
     async def step(self, action):
         battleOrder = self._action_to_battleOrder(action)
         await self.engine.doAction(battleOrder)
-        
+
         observation = self._buildObservation()
+        # self.observation_space = self._buildObservation()
+
         reward = self._determineReward()
-        
+
         await self.render()
-        
+
         return observation, reward, self.engine.battle._finished, False, {}
-    
+
+
     def _action_to_battleOrder(self, action):
         if (0 < action < 5):
             return BattleOrder(self.engine.battle.available_moves[action-1])
@@ -109,7 +143,8 @@ class PokemonBattleEnv(gymnasium.Env):
             return BattleOrder(self.engine.battle.available_switches[action-5])
         else:
             return DefaultBattleOrder()
-        
+
+
     def valid_action_space_mask(self):
         """
         :return: Mask for valid moves used by agent to pick an action
@@ -128,102 +163,161 @@ class PokemonBattleEnv(gymnasium.Env):
         # ex: [1, 0,0,0,0, 1,0] => can make defaultMove (struggle), or available switch #1
 
         return action_mask
-    
+
     async def render(self):
-        if (not self.render_mode): 
+        if (not self.render_mode):
             return
         elif (self.render_mode == "human" and not self._rendered):
             url = f"http://localhost:8000/{self.engine.battle.battle_tag}"
             # ONLY UNCOMMENT WHEN # OF EPISODES IS SMALL
-            # webbrowser.open(url) 
+            # webbrowser.open(url)
             self._rendered = True
-        
+
         await asyncio.sleep(self.metadata["min_rate"])
 
     async def close(self):
         await self.engine.socket.close()
-    
-    # TODO store moves in cache
+
     def _createMove(self, move: Move):
-        file = open("./data/type_nums.json", 'r')
-        # Parse the JSON data and load it into a Python dictionary
-        typeNums = json.load(file)
-        return {
+        return [
             # fire, water, etc curse has ??? type, which is unhandled by poke_env
-            "type": typeNums[move.entry["type"].title()], 
-            "category": move.category.value, # physical, special, status
-            "pp": move.current_pp,
-            "power": move.base_power,
-            "accuracy": move.accuracy
-        }
-    
+            NONE_TYPE if move.entry["type"].upper() == "???" else move.type.value,
+            move.category.value,  # physical, special, status
+            move.current_pp,
+            move.base_power,
+            move.accuracy
+        ]
+
     def _buildObservation(self):
-        # TODO: THERE ARE SUBFORMS - pokemon with 2 names but 1 id bruh
-        file = open("./data/pokemon_nums.json", 'r')
-        # Parse the JSON data and load it into a Python dictionary
-        pokeNums = json.load(file)
-
-
         battleState = self.engine.battle
 
-        friendlyPokemon = []
-        agentActivePokemon = {}
-        for name, pokemon in battleState.team.items():
-            if (pokemon.species ==  battleState.active_pokemon.species):
-                agentActivePokemon = {
-                    "types": (pokemon.types[0].value, pokemon.types[1].value if pokemon.types[1] is not None else 9),
-                    "stats": {
-                        "hp": pokemon.current_hp,
-                        "atk": pokemon.stats["atk"],
-                        "def": pokemon.stats["def"],
-                        "spa": pokemon.stats["spa"],
-                        "spd": pokemon.stats["spd"],
-                        "spe": pokemon.stats["spe"]
-                    },
-                    "status": pokemon.status.value if (pokemon.status is not None) else 0,
-                    "moves": tuple(self._createMove(value) for value in pokemon.moves.values()), #this is gona be death
-                    "id": pokeNums[pokemon.species]
-                }
-            else:
-                friendlyPokemon.append({
-                    "types": (pokemon.types[0].value, pokemon.types[1].value if pokemon.types[1] is not None else 9),
-                    "stats": {
-                        "hp": pokemon.current_hp,
-                        "atk": pokemon.stats["atk"],
-                        "def": pokemon.stats["def"],
-                        "spa": pokemon.stats["spa"],
-                        "spd": pokemon.stats["spd"],
-                        "spe": pokemon.stats["spe"]
-                    },
-                    "status": pokemon.status.value if (pokemon.status is not None) else 0,
-                    "moves": tuple(self._createMove(value) for value in pokemon.moves.values()), #this is gona be death
-                    "id": pokeNums[pokemon.species]
-                })
-            
-        enemyPokemon = battleState.opponent_active_pokemon
-        enemyPokemon = {
-            "types": (enemyPokemon.types[0].value, enemyPokemon.types[1].value if enemyPokemon.types[1] is not None else 0),
-            "stats": {
-                "hp": enemyPokemon.current_hp
-                },
-            "status": enemyPokemon.status.value if (enemyPokemon.status is not None) else 0,
-            "boosts": enemyPokemon.boosts,
-            "id": pokeNums[enemyPokemon.species]
-        }
+        # friendly pokemon
+        activeFriendlyPokemon = []
+        friendlyPartyPokemon = []
 
-        return {   
-            "agentPartyPokemons": friendlyPokemon,
-            "agentActivePokemon": {
-                "Pokemon": agentActivePokemon,
-                "boosts": battleState.active_pokemon.boosts
-            },
-            "enemyActivePokemon": enemyPokemon
-        }
+        for name, pokemon in battleState.team.items():
+            # build friendly pokemon observation
+            friendlyPokemon = [
+                PokemonBattleEnv.pokeNums[pokemon.species],
+                PokemonBattleEnv.abilityNums[pokemon.ability],
+                pokemon.types[0].value, 
+                pokemon.types[1].value if (pokemon.types[1] is not None) else NONE_TYPE,
+                pokemon.status.value if (pokemon.status is not None) else NONE_STATUS,
+                pokemon.current_hp,
+                pokemon.stats["atk"],
+                pokemon.stats["def"],
+                pokemon.stats["spa"], 
+                pokemon.stats["spd"],
+                pokemon.stats["spe"]
+            ] 
+            # include all 4 moves
+            for value in pokemon.moves.values():
+                friendlyPokemon+= self._createMove(value)            
+
+            if (pokemon.species == battleState.active_pokemon.species):
+                activeFriendlyPokemon = list(pokemon.boosts.values()) + friendlyPokemon
+            else:
+                friendlyPartyPokemon += friendlyPokemon
+
+        # observation of enemy's pokemon
+        activeEnemyPokemon = []
+        enemyPartyPokemon = []
+
+        for name, pokemon in battleState.opponent_team.items():
+            # build friendly pokemon observation
+            enemyPokemon = [
+                PokemonBattleEnv.pokeNums[pokemon.species],
+                PokemonBattleEnv.abilityNums[pokemon.ability] if(pokemon.ability is not None) else UNKNOWN_ABILITY,
+                pokemon.types[0].value, 
+                pokemon.types[1].value if (pokemon.types[1] is not None) else NONE_TYPE,
+                pokemon.status.value if (pokemon.status is not None) else NONE_STATUS,
+                pokemon.current_hp, 
+                pokemon.base_stats["atk"],
+                pokemon.base_stats["def"],
+                pokemon.base_stats["spa"],
+                pokemon.base_stats["spd"],
+                pokemon.base_stats["spe"]
+            ] 
+            # include all 4 moves
+            for value in pokemon.moves.values():
+                enemyPokemon += self._createMove(value)
+                
+            enemyPokemon+= (4-len(pokemon.moves)) * [UNKNOWN_TYPE, UNKNOWN_CATEGORY, UNKNOWN_PP, UNKNOWN_POWER, UNKNOWN_ACCURACY] 
+
+            if (pokemon.species == battleState.opponent_active_pokemon.species):
+                activeEnemyPokemon = list(pokemon.boosts.values()) + enemyPokemon
+            else:
+                enemyPartyPokemon += enemyPokemon
+
+        for _ in range (3-len(battleState.opponent_team.items())):
+            enemyPartyPokemon += [UNKNOWN_ID, UNKNOWN_ABILITY, UNKNOWN_TYPE, UNKNOWN_TYPE, NONE_STATUS, 100] 
+            enemyPartyPokemon += 5*[UNKNOWN_STAT] 
+            enemyPartyPokemon += 4*[UNKNOWN_TYPE, UNKNOWN_CATEGORY, UNKNOWN_PP, UNKNOWN_POWER, UNKNOWN_ACCURACY] 
         
+        
+        playerSide = [
+            battleState.turn - battleState.side_conditions[SideCondition.LIGHT_SCREEN] if (SideCondition.LIGHT_SCREEN in battleState.side_conditions) else NONE_SIDE_CONDITION,
+            battleState.turn - battleState.side_conditions[SideCondition.MIST] if (SideCondition.MIST in battleState.side_conditions) else NONE_SIDE_CONDITION,
+            battleState.turn - battleState.side_conditions[SideCondition.REFLECT] if (SideCondition.REFLECT in battleState.side_conditions) else NONE_SIDE_CONDITION,
+            battleState.turn - battleState.side_conditions[SideCondition.SAFEGUARD] if (SideCondition.SAFEGUARD in battleState.side_conditions) else NONE_SIDE_CONDITION,
+            battleState.side_conditions[SideCondition.SPIKES] if (SideCondition.SPIKES in battleState.side_conditions) else NONE_SIDE_CONDITION
+        ]
+
+        opponentSide = [
+            battleState.turn - battleState.opponent_side_conditions[SideCondition.LIGHT_SCREEN] if (SideCondition.LIGHT_SCREEN in battleState.opponent_side_conditions) else NONE_SIDE_CONDITION,
+            battleState.turn - battleState.opponent_side_conditions[SideCondition.MIST] if (SideCondition.MIST in battleState.opponent_side_conditions) else NONE_SIDE_CONDITION,
+            battleState.turn - battleState.opponent_side_conditions[SideCondition.REFLECT] if (SideCondition.REFLECT in battleState.opponent_side_conditions) else NONE_SIDE_CONDITION,
+            battleState.turn - battleState.opponent_side_conditions[SideCondition.SAFEGUARD] if (SideCondition.SAFEGUARD in battleState.opponent_side_conditions) else NONE_SIDE_CONDITION,
+            battleState.opponent_side_conditions[SideCondition.SPIKES] if (SideCondition.SPIKES in battleState.opponent_side_conditions) else NONE_SIDE_CONDITION
+        ]
+
+        # observation of game
+        game = [
+            NONE_WEATHER if not battleState.weather else list(battleState.weather.keys())[0].value,
+            *playerSide,
+            *opponentSide
+        ]
+
+        # battleState.fields
+        # print(len(activeFriendlyPokemon))
+        # print(len(friendlyPartyPokemon))
+        # print(len(activeEnemyPokemon))
+        # print(len(enemyPartyPokemon))
+        # print(len(game))
+        # print(len(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game))
+        # print("\n")
+        return activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game
+
     def _determineReward(self):
-        if self.engine.battle.won is None:
+        # TODO: intermittent rewards? need to keep track of previous state to compare to
+
+        if not self.engine.battle._finished: 
             return 0
+       
+        reward = 0
+        
+        for name, friendly in self.engine.battle.team.items():
+            # punished for fainted friendly
+            if friendly.fainted:
+                reward -= 1
+            # reward proportional to keeping friendly alive
+            else:
+                reward += 1 * (friendly.current_hp/friendly.max_hp)
+        for name, enemy in self.engine.battle.opponent_team.items():
+            # rewarded for fainted enemy
+            if enemy.fainted:
+                reward += 1
+            # punishment proportional to how close to taking down each enemy
+            else:
+                reward -= 1 * (enemy.current_hp/enemy.max_hp)
+
+        if self.engine.battle.won is None:
+            reward += 0
         elif self.engine.battle.won:
-            return 1
+            reward += 100
         else:
-            return -1
+            reward -= 100
+        # on ties this would also do -100?
+        # reward += 100 if self.engine.battle.won else -100
+
+        return reward

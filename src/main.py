@@ -76,8 +76,8 @@ async def runRandomAgent(env: PokemonBattleEnv, max_episode=1):
 
 if __name__ == "__main__":
     start_time = time.time()
-    asyncio.run(main())
-    # asyncio.run(mainSynchronous())
+    # asyncio.run(main())
+    asyncio.run(mainSynchronous())
     print(f"Elapsed time:", time.time()-start_time, "s")
 
 

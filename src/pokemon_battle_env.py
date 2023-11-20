@@ -50,7 +50,7 @@ class PokemonBattleEnv(gymnasium.Env):
             Discrete(4, start=UNKNOWN_CATEGORY),    # Category (physical, special, status)
             Discrete(66, start=UNKNOWN_PP),         # PP
             Discrete(251, start=UNKNOWN_POWER),     # Power
-            Discrete(71, start=UNKNOWN_ACCURACY),   # Accuracy (29 - 100) --> TODO: might need to change (engine stores acc as float between 0-1)
+            Discrete(71, start=UNKNOWN_ACCURACY),   # Accuracy (29 - 100)
             Discrete(13, start=UNKNOWN_PRIORITY)    # Priority  
         ]
 
@@ -105,7 +105,7 @@ class PokemonBattleEnv(gymnasium.Env):
         
         # +1 representing defaultAction (struggle) when no other actions are valid
         self.action_space = Discrete(6+1)
-        self.reward_range = (-1, 1)
+        self.reward_range = (-16, 16)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -236,7 +236,6 @@ class PokemonBattleEnv(gymnasium.Env):
                 friendlyPartyPokemon += friendlyPokemon
 
         # observation of enemy's pokemon
-        # TODO: how to get opponents team in order? not that important?
         activeEnemyPokemon = []
         enemyPartyPokemon = []
         for name, pokemon in battleState.opponent_team.items():
@@ -331,9 +330,9 @@ class PokemonBattleEnv(gymnasium.Env):
         if self.engine.battle.won is None:
             reward += 0
         elif self.engine.battle.won:
-            reward += 100
+            reward += 10 # TODO: reward for win/loss
         else:
-            reward -= 100
+            reward -= 10
         # on ties this would also do -100?
         # reward += 100 if self.engine.battle.won else -100
 

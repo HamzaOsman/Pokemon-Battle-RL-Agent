@@ -138,7 +138,7 @@ class PokemonBattleEnv(gymnasium.Env):
 
         await self.render()
 
-        return observation, reward, self.engine.battle._finished, False, {}
+        return observation, reward, self.engine.battle._finished, False, { "result": self._result() }
 
 
     def _action_to_battleOrder(self, action):
@@ -357,3 +357,11 @@ class PokemonBattleEnv(gymnasium.Env):
         # reward += 100 if self.engine.battle.won else -100
 
         return reward
+    
+    def _result(self):
+        if self.engine.battle.won is None:
+            return (0, 0)
+        elif self.engine.battle.won:
+            return (1, 0)
+        else:
+            return (0, 1)

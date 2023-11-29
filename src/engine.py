@@ -37,7 +37,10 @@ class Engine:
             messageSplit = message.split("|")
             if(messageSplit[1] == "pm" and messageSplit[4].startswith("/challenge")):
                 return
-        
+            
+    def resetBattle(self):
+        self.battle = None
+        self.orderedPartyPokemon = []
 
     async def _sendMessage(self, message: str, room: str = ""):
         await self.socket.send("|".join([room, message]))
@@ -60,7 +63,7 @@ class Engine:
         await self._sendMessage(challengeMsg)
 
         await self.parseInitialBattle()
-        print("battle started!")
+        # print("battle started!")
 
     async def parseInitialBattle(self):
         isInit = False
@@ -159,11 +162,9 @@ class Engine:
                     for pokemon in side["pokemon"]:
                         if pokemon:
                             pokemon = battle.team[pokemon["ident"]]
-                            # if self.agent.isChallenger:
-                            #     print("active?", pokemon.active, "fainted?", pokemon.fainted, pokemon.species)
+                            # print("active?", pokemon.active, "fainted?", pokemon.fainted, pokemon.species)
                             if not pokemon.active:
                                 self.orderedPartyPokemon.append(pokemon)
-                    # print("\n\n")
 
             elif split_message[1] == "win" or split_message[1] == "tie":
                 if split_message[1] == "win":
@@ -182,6 +183,12 @@ class Engine:
             else:
                 battle._parse_message(split_message)
 
+                # handle case where switch happens but orderedPartyPokemon didnt get updated
+                i, activePokemon = next(((i, pokemon) for i, pokemon in enumerate(self.orderedPartyPokemon) if pokemon.species == battle.active_pokemon.species), (None, None))
+                if (activePokemon is not None):
+                    prevActivePokemo = next((pokemon for pokemon in battle.team.values() if pokemon not in self.orderedPartyPokemon))
+                    self.orderedPartyPokemon[i] = prevActivePokemo
+                    
         self.battle = battle
         
     def _create_battle(self, split_message: List[str]) -> Battle:

@@ -119,10 +119,12 @@ class PokemonBattleEnv(gymnasium.Env):
 
         self._rendered = False
 
+        self.engine.resetBattle()
+
         await self.engine.startBattle()
 
         await self.render()
-        # self.observation_space = self._buildObservation()
+
         return self._buildObservation(), {}
 
 
@@ -131,7 +133,6 @@ class PokemonBattleEnv(gymnasium.Env):
         await self.engine.doAction(battleOrder)
 
         observation = self._buildObservation()
-        # self.observation_space = self._buildObservation()
 
         reward = self._determineReward()
 
@@ -211,7 +212,7 @@ class PokemonBattleEnv(gymnasium.Env):
         activeFriendlyPokemon = []
         friendlyPartyPokemon = []
 
-        for pokemon in [battleState.active_pokemon] + self.engine.orderedPartyPokemon:
+        for pokemon in [battleState.active_pokemon]+self.engine.orderedPartyPokemon:
             # build friendly pokemon observation
             friendlyPokemon = [
                 PokemonBattleEnv.itemNums[pokemon.item] if (pokemon.item is not None) else NONE_ITEM,
@@ -300,8 +301,27 @@ class PokemonBattleEnv(gymnasium.Env):
         # print(len(activeEnemyPokemon))
         # print(len(enemyPartyPokemon))
         # print(len(game))
-        print(len(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game))
-        print("\n")
+        # print(len(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game))
+        # print("\n\n")
+        # if (len(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game)) != 238:
+        #     print("activeFriendlyPokemon")
+        #     print(activeFriendlyPokemon)
+        #     print("friendlyPartyPokemon")
+        #     print(friendlyPartyPokemon)
+        #     print("activeEnemyPokemon")
+        #     print(activeEnemyPokemon)
+        #     print("enemyPartyPokemon")
+        #     print(enemyPartyPokemon)
+        #     print("game")
+        #     print(game)
+        #     print(len(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game))
+        #     print(len(activeFriendlyPokemon))
+        #     print(len(friendlyPartyPokemon))
+        #     print(len(activeEnemyPokemon))
+        #     print(len(enemyPartyPokemon))
+        #     print(len(game))
+        #     print("\n\n")
+
         return activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game
 
     def _determineReward(self):

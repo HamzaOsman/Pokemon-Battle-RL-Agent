@@ -19,6 +19,7 @@ class Engine:
     def __init__(self, agent: Agent, opponentUsername: str, socket: websockets.WebSocketClientProtocol = None):
         self.battle: Battle = None
         self.agent = agent
+        self.orderedPartyPokemon = []
         self.opponentUsername = opponentUsername
         self.socket = socket
 
@@ -36,7 +37,10 @@ class Engine:
             messageSplit = message.split("|")
             if(messageSplit[1] == "pm" and messageSplit[4].startswith("/challenge")):
                 return
-        
+            
+    def resetBattle(self):
+        self.battle = None
+        self.orderedPartyPokemon = []
 
     async def _sendMessage(self, message: str, room: str = ""):
         await self.socket.send("|".join([room, message]))
@@ -59,7 +63,7 @@ class Engine:
         await self._sendMessage(challengeMsg)
 
         await self.parseInitialBattle()
-        print("battle started!")
+        # print("battle started!")
 
     async def parseInitialBattle(self):
         isInit = False
@@ -112,7 +116,7 @@ class Engine:
         # send the agent and possibly the opponents decision to the socket
         await self._sendMessage(agentMsg, roomId)
         await self._parseBattle()
-        if self.battle._wait and not self.battle.finished:
+        while (self.battle._wait and not self.battle.finished):
             await self._parseBattle()
 
         # print()
@@ -148,8 +152,20 @@ class Engine:
                 continue
             elif split_message[1] == "request":
                 if split_message[2]:
+                    # Since Python 3.7 json.loads preserves dict order by default.
                     request = orjson.loads(split_message[2])
                     battle._parse_request(request)
+                    
+                    side = request["side"]
+                    self.orderedPartyPokemon = []
+                    # comes from pokemon showdown, true order
+                    for pokemon in side["pokemon"]:
+                        if pokemon:
+                            pokemon = battle.team[pokemon["ident"]]
+                            # print("active?", pokemon.active, "fainted?", pokemon.fainted, pokemon.species)
+                            if not pokemon.active:
+                                self.orderedPartyPokemon.append(pokemon)
+
             elif split_message[1] == "win" or split_message[1] == "tie":
                 if split_message[1] == "win":
                     battle._won_by(split_message[2])
@@ -167,6 +183,12 @@ class Engine:
             else:
                 battle._parse_message(split_message)
 
+                # handle case where switch happens but orderedPartyPokemon didnt get updated
+                i, activePokemon = next(((i, pokemon) for i, pokemon in enumerate(self.orderedPartyPokemon) if pokemon.species == battle.active_pokemon.species), (None, None))
+                if (activePokemon is not None):
+                    prevActivePokemo = next((pokemon for pokemon in battle.team.values() if pokemon not in self.orderedPartyPokemon))
+                    self.orderedPartyPokemon[i] = prevActivePokemo
+                    
         self.battle = battle
         
     def _create_battle(self, split_message: List[str]) -> Battle:

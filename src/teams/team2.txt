@@ -1,3 +1,12 @@
+Tyranitar (M) @ Leftovers
+Ability: Sand Stream
+EVs: 244 Atk / 12 SpA / 252 Spe
+Naive Nature
+- Dragon Dance
+- Rock Slide
+- Taunt
+- Ice Beam
+
 Blissey (F) @ Leftovers
 Ability: Natural Cure
 EVs: 44 HP / 252 Def / 212 SpA
@@ -17,11 +26,3 @@ Adamant Nature
 - Rock Slide
 - Explosion
 
-Tyranitar (M) @ Leftovers
-Ability: Sand Stream
-EVs: 244 Atk / 12 SpA / 252 Spe
-Naive Nature
-- Dragon Dance
-- Rock Slide
-- Earthquake
-- Ice Beam

@@ -1,21 +1,3 @@
-Dugtrio (F) @ Choice Band
-Ability: Arena Trap
-EVs: 4 HP / 252 Atk / 252 Spe
-Adamant Nature
-- Earthquake
-- Rock Slide
-- Aerial Ace
-- Dig
-
-Claydol @ Leftovers
-Ability: Levitate
-EVs: 252 HP / 240 Atk / 16 Def
-Adamant Nature
-- Earthquake
-- Shadow Ball
-- Rapid Spin
-- Explosion
-
 Skarmory (M) @ Leftovers
 Ability: Keen Eye
 EVs: 252 HP / 4 Def / 252 SpD
@@ -24,3 +6,22 @@ Careful Nature
 - Roar
 - Toxic
 - Drill Peck
+
+Dugtrio (F) @ Choice Band
+Ability: Arena Trap
+EVs: 4 HP / 252 Atk / 252 Spe
+Adamant Nature
+- Earthquake
+- Rock Slide
+- Aerial Ace
+- Mimic
+
+Claydol @ Leftovers
+Ability: Levitate
+EVs: 252 HP / 240 Atk / 16 Def
+Adamant Nature
+- Earthquake
+- Shadow Ball
+- Rapid Spin
+- Toxic
+

@@ -45,63 +45,75 @@ class PokemonBattleEnv(gymnasium.Env):
             # weight
             # gender
 
-        move = [
-            Discrete(19, start=UNKNOWN_TYPE),       # Type
-            Discrete(4, start=UNKNOWN_CATEGORY),    # Category (physical, special, status)
-            Discrete(66, start=UNKNOWN_PP),         # PP
-            Discrete(251, start=UNKNOWN_POWER),     # Power
-            Discrete(71, start=UNKNOWN_ACCURACY),   # Accuracy (29 - 100)
-            Discrete(13, start=UNKNOWN_PRIORITY)    # Priority  
+        move_min = [
+            UNKNOWN_TYPE,     # Type
+            UNKNOWN_CATEGORY, # Category (physical, special, status)
+            UNKNOWN_PP,       # PP
+            UNKNOWN_POWER,    # Power
+            UNKNOWN_ACCURACY, # Accuracy
+            UNKNOWN_PRIORITY  # Priority
+        ]  
+        move_max = [18, 3, 64, 250, 100, 5]
+
+        boosts_min = 7*[-6] # attack, special attack, defense, special defense, speed, accuracy, evasiveness
+        boosts_max = 7*[6]
+        
+        friendlyPokemon_min = [
+            0, # item
+            1, # ability
+            1, # type1
+            0, # type2
+            0, # status
+            1, # hp
+            1, # atk
+            1, # def
+            1, # spa
+            1, # spd
+            1  # spe
+        ] + 4*move_min
+        friendlyPokemon_max = [117, 76, 18, 18, 7, 999, 999, 999, 999, 999, 999] + 4*move_max
+        
+        activeFriendlyPokemon_min = boosts_min + friendlyPokemon_min
+        activeFriendlyPokemon_max = boosts_max + friendlyPokemon_max
+
+        enemyPokemon_min = [
+            UNKNOWN_ID,      # id
+            UNKNOWN_ITEM,    # item
+            UNKNOWN_ABILITY, # ability
+            UNKNOWN_TYPE,    # type1
+            UNKNOWN_TYPE,    # type2
+            0,               # status
+            0,               # hp percent
+            # base hp ???
+            UNKNOWN_STAT,    # base atk
+            UNKNOWN_STAT,    # base def
+            UNKNOWN_STAT,    # base spa
+            UNKNOWN_STAT,    # base spd
+            UNKNOWN_STAT,    # base spe
+        ] + 4*move_min
+        enemyPokemon_max = [386, 117, 76, 18, 18, 7, 100, 255, 255, 255, 255, 255] + 4*move_max
+
+        activeEnemyPokemon_min = boosts_min + enemyPokemon_min
+        activeEnemyPokemon_max = boosts_max + enemyPokemon_max
+
+        sideConditions_min = [
+            NONE_SIDE_CONDITION, # LIGHT_SCREEN
+            NONE_SIDE_CONDITION, # MIST
+            NONE_SIDE_CONDITION, # REFLECT
+            NONE_SIDE_CONDITION, # SAFEGUARD
+            NONE_SIDE_CONDITION, # SPIKES
         ]
+        sideConditions_max = [4, 4, 4, 4, 3]
 
-        boosts = 7*[Discrete(13, start=-6)] # attack, special attack, defense, special, defense, speed, accuracy, evasiveness
-        
-        friendlyPokemon = [          
-            Discrete(118, start=0), # item
-            Discrete(76, start=1),  # ability
-            Discrete(18, start=0),  # type1
-            Discrete(18, start=0),  # type2
-            Discrete(8, start=0),   # status
-            Discrete(999, start=1), # hp
-            Discrete(999, start=1), # atk
-            Discrete(999, start=1), # def
-            Discrete(999, start=1), # spa
-            Discrete(999, start=1), # spd
-            Discrete(999, start=1)  # spe
-        ] + 4*move
-        
-        activeFriendlyPokemon = boosts + friendlyPokemon
+        game_min = [
+            NONE_WEATHER # Weather
+        ] + 2*sideConditions_min
+        game_max = [9] + 2*sideConditions_max
+                         
+        features_min = np.array(activeFriendlyPokemon_min+2*friendlyPokemon_min+activeEnemyPokemon_min+2*enemyPokemon_min+game_min)
+        features_max = np.array(activeFriendlyPokemon_max+2*friendlyPokemon_max+activeEnemyPokemon_max+2*enemyPokemon_max+game_max)
 
-        enemyPokemon = [
-            Discrete(386, start=UNKNOWN_ID),       # id, 0 for unknown
-            Discrete(119, start=UNKNOWN_ITEM),     # item, -1 for unknown
-            Discrete(77, start=UNKNOWN_ABILITY),   # ability, 0 for unknown
-            Discrete(19, start=UNKNOWN_TYPE),      # types, -1 for unknown, 0 for no type
-            Discrete(19, start=UNKNOWN_TYPE),
-            Discrete(8, start=0),                  # status
-            Discrete(101, start=0),                # hp percent
-            Discrete(256, start=UNKNOWN_STAT),     # base atk
-            Discrete(256, start=UNKNOWN_STAT),     # base def
-            Discrete(256, start=UNKNOWN_STAT),     # base spa
-            Discrete(256, start=UNKNOWN_STAT),     # base spd
-            Discrete(256, start=UNKNOWN_STAT),     # base spe
-        ] + 4*move
-
-        sideConditions = [
-            Discrete(5, start=NONE_SIDE_CONDITION), #LIGHT_SCREEN 
-            Discrete(5, start=NONE_SIDE_CONDITION), #MIST
-            Discrete(5, start=NONE_SIDE_CONDITION), #REFLECT
-            Discrete(5, start=NONE_SIDE_CONDITION), #SAFEGUARD 
-            Discrete(4, start=NONE_SIDE_CONDITION)  #SPIKES
-        ] 
-
-        game = [
-            Discrete(10, start=NONE_WEATHER)    # Weather
-        ] + 2*sideConditions
-        
-        activeEnemyPokemon = boosts + enemyPokemon
-        
-        self.observation_space = gymnasium.spaces.Tuple((activeFriendlyPokemon + 2 * friendlyPokemon + activeEnemyPokemon + 2 * enemyPokemon + game))
+        self.observation_space = gymnasium.spaces.Box(low=features_min, high=features_max, dtype=np.int16)
         
         # +1 representing defaultAction (struggle) when no other actions are valid
         self.action_space = Discrete(6+1)
@@ -110,7 +122,6 @@ class PokemonBattleEnv(gymnasium.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self._rendered = False
-
 
     async def reset(self, seed=None):
         super().reset(seed=seed)
@@ -142,9 +153,9 @@ class PokemonBattleEnv(gymnasium.Env):
 
 
     def _action_to_battleOrder(self, action):
-        if (1 < action < 5):
+        if (1 <= action <= 4):
             return BattleOrder(list(self.engine.battle.active_pokemon.moves.values())[action-1])
-        elif (4 < action < 7):
+        elif (5 <= action <= 6):
             return BattleOrder(self.engine.orderedPartyPokemon[action-5])
         else:
             # action index 0
@@ -187,6 +198,7 @@ class PokemonBattleEnv(gymnasium.Env):
 
     def _createMove(self, move: Move):
         return [
+            #TODO: add move id (to learn unknown info like move side effects)
             # fire, water, etc curse has ??? type, which is unhandled by poke_env
             NONE_TYPE if move.entry["type"].upper() == "???" else move.type.value,
             move.category.value,  # physical, special, status
@@ -295,34 +307,7 @@ class PokemonBattleEnv(gymnasium.Env):
             *opponentSide
         ]
 
-        # battleState.fields
-        # print(len(activeFriendlyPokemon))
-        # print(len(friendlyPartyPokemon))
-        # print(len(activeEnemyPokemon))
-        # print(len(enemyPartyPokemon))
-        # print(len(game))
-        # print(len(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game))
-        # print("\n\n")
-        # if (len(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game)) != 238:
-        #     print("activeFriendlyPokemon")
-        #     print(activeFriendlyPokemon)
-        #     print("friendlyPartyPokemon")
-        #     print(friendlyPartyPokemon)
-        #     print("activeEnemyPokemon")
-        #     print(activeEnemyPokemon)
-        #     print("enemyPartyPokemon")
-        #     print(enemyPartyPokemon)
-        #     print("game")
-        #     print(game)
-        #     print(len(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game))
-        #     print(len(activeFriendlyPokemon))
-        #     print(len(friendlyPartyPokemon))
-        #     print(len(activeEnemyPokemon))
-        #     print(len(enemyPartyPokemon))
-        #     print(len(game))
-        #     print("\n\n")
-
-        return activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game
+        return np.array(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game)
 
     def _determineReward(self):
         # TODO: intermittent rewards? need to keep track of previous state to compare to

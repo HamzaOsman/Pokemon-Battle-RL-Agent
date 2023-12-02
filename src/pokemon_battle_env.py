@@ -345,8 +345,8 @@ class PokemonBattleEnv(gymnasium.Env):
     
     def _result(self):
         if self.engine.battle.won is None:
-            return (0, 0)
+            return (0, 0, 1)
         elif self.engine.battle.won:
-            return (1, 0)
+            return (1, 0, 0)
         else:
-            return (0, 1)
+            return (0, 1, 0)

@@ -2,6 +2,8 @@ import asyncio
 import time
 
 import websockets
+# from a2c import runAdvantageActorCritic
+from actor_critic import learnActorCritic, runActorCritic
 from agent import Agent
 from engine import Engine
 from pokemon_battle_env import PokemonBattleEnv
@@ -27,7 +29,7 @@ async def main():
 
     await asyncio.gather(*tasks)
     
-async def mainSynchronous():
+async def runAgents(agentFunc, opponentFunc, max_episode=3000):
     websocketUrl = "ws://localhost:8000/showdown/websocket"
     agentSocket =  await websockets.connect(websocketUrl)
     opponentSocket =  await websockets.connect(websocketUrl)
@@ -35,19 +37,52 @@ async def mainSynchronous():
 
     agentEnv, opponentEnv = await buildEnv(0, False, agentSocket, opponentSocket)
     
-    max_episode = 1000
     gamma = 0.99
     step_size = 0.001
     epsilon = 0.5
 
     tasks = []
 
-    # tasks.append(runQLAgent(agentEnv, max_episode, gamma, step_size, epsilon))
-    tasks.append(runGreedyAgent(agentEnv, './models/QL_model.npy', max_episode))
-    # tasks.append(runRandomAgent(agentEnv, max_episode))
-    tasks.append(runRandomAgent(opponentEnv, max_episode))
-        
+    agentEnv, opponentEnv = await buildEnv(0, False, agentSocket, opponentSocket)
+    tasks.append(agentFunc(agentEnv, max_episode))
+    tasks.append(opponentFunc(opponentEnv, max_episode))
     await asyncio.gather(*tasks)
+
+async def mainSynchronous():
+    websocketUrl = "ws://localhost:8000/showdown/websocket"
+    agentSocket =  await websockets.connect(websocketUrl)
+    opponentSocket =  await websockets.connect(websocketUrl)
+    print("connection went fine")
+
+    # agentEnv, opponentEnv = await buildEnv(0, False, agentSocket, opponentSocket)
+    
+    # max_episode = 3000
+    # gamma = 0.99
+    # step_size = 0.001
+    # epsilon = 0.5
+
+    # tasks = []
+
+    # tasks.append(runQLAgent(agentEnv, max_episode, gamma, step_size, epsilon))
+    # tasks.append(runGreedyAgent(agentEnv, './models/QL_model.npy', max_episode))
+
+    # tasks.append(runRandomAgent(agentEnv, max_episode))
+
+    # print("LEARNING AC AGAINST RANDOM")
+    # await runAgents(learnActorCritic, runRandomAgent)
+
+    # print("PLAYING RANDOM-LEARNED-AC AGAINST RANDOM")
+    # await runAgents(runActorCritic, runRandomAgent)
+
+    # print("PLAYING RANDOM-LEARNED-AC AGAINST RANDOM-LEARNED-AC")
+    # await runAgents(runActorCritic, runActorCritic)
+
+    print("LEARNING AC AGAINST RANDOM-LEARNED-AC")
+    await runAgents(learnActorCritic, runActorCritic, 10000)
+
+    print("PLAYING AC-LEARNED-AC AGAINST AC-LEARNED-AC")
+    await runAgents(runActorCritic, runActorCritic)
+
 
 async def buildEnv(i: int, isSeparate: bool = True, agentSocket: websockets.WebSocketClientProtocol = None, opponentSocket: websockets.WebSocketClientProtocol = None):
     agentUsername = "agent"
@@ -57,7 +92,7 @@ async def buildEnv(i: int, isSeparate: bool = True, agentSocket: websockets.WebS
         opponentUsername += str(i)
     
     agent = Agent(agentUsername, True, teamstr1)
-    opponent = Agent(opponentUsername, False, teamstr2)
+    opponent = Agent(opponentUsername, False, teamstr1)
 
     agentEngine = Engine(agent, opponent.username, agentSocket)
     opponentEngine = Engine(opponent, agent.username, opponentSocket)

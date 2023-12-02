@@ -139,11 +139,13 @@ async def trainModel(env: PokemonBattleEnv, max_episode=1, previousModel=None):
                 target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
             target_net.load_state_dict(target_net_state_dict)
 
-        wins, losses = wins+info["result"][0], losses+info["result"][1], ties+(info['result'] == (0,0))
+        wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+(info['result'] == (0,0))
     
     await env.close()
-    torch.save(policy_net.state_dict(), './models/DQN_model.pth')
     print(f"DQNAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
+    
+    policy_net = policy_net.to('cpu')
+    torch.save(policy_net.state_dict(), './models/DQN_model.pth')
 
 def select_action(env, state, policy_net, EPS_START=0, EPS_END=0, EPS_DECAY=1, steps_done=1):
     sample = random.random()
@@ -178,10 +180,10 @@ async def testModel(env: PokemonBattleEnv, model: DQN, max_episodes=1):
 
 def loadModel(env: PokemonBattleEnv, model_path: str):
     try:
-        model = DQN(env.observation_space.shape[0], env.action_space.n).to(device)    
-        model_state = torch.load(model_path)
+        model = DQN(env.observation_space.shape[0], env.action_space.n)
+        model_state = torch.load(model_path, map_location='cpu')
         model.load_state_dict(model_state)
-        return model
+        return model.to(device)
     except Exception as e:
         print(f"Error loading DQN model")
         exit()

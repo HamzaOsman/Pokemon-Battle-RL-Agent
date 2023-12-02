@@ -36,7 +36,7 @@ async def mainSynchronous():
 
     agentEnv, opponentEnv = await buildEnv(0, False, agentSocket, opponentSocket)
     
-    max_episode = 1000
+    max_episode = 100
     gamma = 0.99
     step_size = 0.001
     epsilon = 0.5

@@ -2,16 +2,17 @@ import asyncio
 import time
 
 import websockets
+import DQN
 from agent import Agent
 from engine import Engine
 from pokemon_battle_env import PokemonBattleEnv
 import numpy as np
 
-with open('teams/team1.txt') as f:
-    teamstr2 = f.read()
-
-with open('teams/team2.txt') as f:
+with open('teams/team3.txt') as f:
     teamstr1 = f.read()
+
+with open('teams/team3.txt') as f:
+    teamstr2 = f.read()
 
 async def main():
     max_episode = 100
@@ -43,8 +44,13 @@ async def mainSynchronous():
     tasks = []
 
     # tasks.append(runQLAgent(agentEnv, max_episode, gamma, step_size, epsilon))
-    tasks.append(runGreedyAgent(agentEnv, './models/QL_model.npy', max_episode))
-    # tasks.append(runRandomAgent(agentEnv, max_episode))
+    # tasks.append(runGreedyAgent(agentEnv, './models/QL_model.npy', max_episode))
+    
+    #tasks.append(DQN.trainModel(agentEnv, max_episode, './models/DQN_model.pth'))
+    tasks.append(runGreedyDQNAgent(agentEnv, './models/DQN_model.pth', max_episode))
+    #tasks.append(runGreedyDQNAgent(opponentEnv, './models/DQN_model.pth', max_episode))
+    
+    #tasks.append(runRandomAgent(agentEnv, max_episode))
     tasks.append(runRandomAgent(opponentEnv, max_episode))
         
     await asyncio.gather(*tasks)
@@ -115,6 +121,17 @@ async def runGreedyAgent(env: PokemonBattleEnv, model_file, max_episode=1):
     await env.close()
 
     print(f"runGreedyAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
+
+async def runGreedyDQNAgent(env: PokemonBattleEnv, model_file, max_episode=1):
+    wins = 0
+    losses = 0
+    ties = 0
+
+    model = DQN.loadModel(env, model_file)
+    wins, losses, ties  = await DQN.testModel(env, model, max_episode)
+    await env.close()
+
+    print(f"runGreedyNNAgent({env.engine.agent.username}) record:\ngames played: {max_episode}, wins: {wins}, losses {losses}, ties: {ties}: win percentage: {wins/max_episode}")
 
 
 async def runQLAgent(env: PokemonBattleEnv, max_episode=1, gamma=0.99, step_size=0.005, epsilon=0.1):

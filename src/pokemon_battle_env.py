@@ -36,7 +36,9 @@ class PokemonBattleEnv(gymnasium.Env):
     
     def __init__(self, engine: Engine, render_mode=None):
         self.engine = engine
-        
+        self.TEAM_SIZE = 3 # TODO: dynamically set to friendly team size
+        self.ENEMY_TEAM_SIZE = 3 # TODO: dynamically set to enemy team size
+
         #WIP
         #Game state
             # effects
@@ -71,7 +73,7 @@ class PokemonBattleEnv(gymnasium.Env):
             1, # spd
             1  # spe
         ] + 4*move_min
-        friendlyPokemon_max = [117, 76, 18, 18, 7, 999, 999, 999, 999, 999, 999] + 4*move_max
+        friendlyPokemon_max = [117, 76, 18, 18, 7, 255, 255, 255, 255, 255, 255] + 4*move_max
         
         activeFriendlyPokemon_min = boosts_min + friendlyPokemon_min
         activeFriendlyPokemon_max = boosts_max + friendlyPokemon_max
@@ -110,14 +112,14 @@ class PokemonBattleEnv(gymnasium.Env):
         ] + 2*sideConditions_min
         game_max = [9] + 2*sideConditions_max
                          
-        features_min = np.array(activeFriendlyPokemon_min+2*friendlyPokemon_min+activeEnemyPokemon_min+2*enemyPokemon_min+game_min)
-        features_max = np.array(activeFriendlyPokemon_max+2*friendlyPokemon_max+activeEnemyPokemon_max+2*enemyPokemon_max+game_max)
+        features_min = np.array(activeFriendlyPokemon_min+(self.TEAM_SIZE-1)*friendlyPokemon_min+activeEnemyPokemon_min+(self.ENEMY_TEAM_SIZE-1)*enemyPokemon_min+game_min)
+        features_max = np.array(activeFriendlyPokemon_max+(self.TEAM_SIZE-1)*friendlyPokemon_max+activeEnemyPokemon_max+(self.ENEMY_TEAM_SIZE-1)*enemyPokemon_max+game_max)
 
         self.observation_space = gymnasium.spaces.Box(low=features_min, high=features_max, dtype=np.int16)
         
         # +1 representing defaultAction (struggle) when no other actions are valid
-        self.action_space = Discrete(6+1)
-        self.reward_range = (-16, 16)
+        self.action_space = Discrete(4+(self.TEAM_SIZE-1)+1)
+        self.reward_range = (-50-self.TEAM_SIZE-self.ENEMY_TEAM_SIZE, 50+self.TEAM_SIZE+self.ENEMY_TEAM_SIZE)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -155,7 +157,7 @@ class PokemonBattleEnv(gymnasium.Env):
     def _action_to_battleOrder(self, action):
         if (1 <= action <= 4):
             return BattleOrder(list(self.engine.battle.active_pokemon.moves.values())[action-1])
-        elif (5 <= action <= 6):
+        elif (5 <= action < self.action_space.n):
             return BattleOrder(self.engine.orderedPartyPokemon[action-5])
         else:
             # action index 0
@@ -166,7 +168,7 @@ class PokemonBattleEnv(gymnasium.Env):
         """
         :return: Mask for valid moves used by agent to pick an action
         """
-        action_mask = np.zeros(7, np.int8)
+        action_mask = np.zeros(self.action_space.n, np.int8)
         if (not self.engine.battle.force_switch and len(self.engine.battle.available_moves) > 0):
             available_moves_ids = [move.id for move in self.engine.battle.available_moves]
             if ("struggle" not in available_moves_ids):
@@ -278,7 +280,7 @@ class PokemonBattleEnv(gymnasium.Env):
             else:
                 enemyPartyPokemon += enemyPokemon
 
-        for _ in range (3-len(battleState.opponent_team.items())):
+        for _ in range (self.ENEMY_TEAM_SIZE-len(battleState.opponent_team.items())):
             enemyPartyPokemon += [UNKNOWN_ID, UNKNOWN_ITEM, UNKNOWN_ABILITY, UNKNOWN_TYPE, UNKNOWN_TYPE, NONE_STATUS, 100] 
             enemyPartyPokemon += 5*[UNKNOWN_STAT] 
             enemyPartyPokemon += 4*[UNKNOWN_TYPE, UNKNOWN_CATEGORY, UNKNOWN_PP, UNKNOWN_POWER, UNKNOWN_ACCURACY, UNKNOWN_PRIORITY] 
@@ -333,9 +335,9 @@ class PokemonBattleEnv(gymnasium.Env):
                 reward -= 1 * (enemy.current_hp/enemy.max_hp)
 
         if self.engine.battle.won is None:
-            reward += 0
+            reward -= 5
         elif self.engine.battle.won:
-            reward += 10 # TODO: reward for win/loss
+            reward += 10
         else:
             reward -= 10
         # on ties this would also do -100?
@@ -345,8 +347,8 @@ class PokemonBattleEnv(gymnasium.Env):
     
     def _result(self):
         if self.engine.battle.won is None:
-            return (0, 0)
+            return (0, 0, 1)
         elif self.engine.battle.won:
-            return (1, 0)
+            return (1, 0, 0)
         else:
-            return (0, 1)
+            return (0, 1, 0)

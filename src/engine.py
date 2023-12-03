@@ -9,14 +9,14 @@ from poke_env.data import GenData
 from inspect import isawaitable
 from typing import List
 import websockets
-from agent import Agent
+from player_config import PlayerConfig
 
 # engine which manages the battle
 class Engine:
     # battleFormat: str = "gen3randombattle"
     battleFormat: str = "gen3ou"
 
-    def __init__(self, agent: Agent, opponentUsername: str, socket: websockets.WebSocketClientProtocol = None):
+    def __init__(self, agent: PlayerConfig, opponentUsername: str, socket: websockets.WebSocketClientProtocol = None):
         self.battle: Battle = None
         self.agent = agent
         self.orderedPartyPokemon = []

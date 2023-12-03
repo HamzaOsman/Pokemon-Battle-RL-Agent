@@ -2,8 +2,10 @@ import asyncio
 import time
 
 import websockets
-import DQN
-from agent import Agent
+
+from agents import DQN, actor_critic as AC, qlearning as QL
+
+from player_config import PlayerConfig
 from engine import Engine
 from pokemon_battle_env import PokemonBattleEnv
 import numpy as np
@@ -15,61 +17,57 @@ with open('teams/team3.txt') as f:
     teamstr2 = f.read()
 
 async def main():
-    max_episode = 100
+    for g in range(2):
+        print("\nGeneration: ", g+1)
+        websocketUrl = "ws://localhost:8000/showdown/websocket"
+        # agentSocket =  await websockets.connect(websocketUrl)
+        # opponentSocket =  await websockets.connect(websocketUrl)
+        print("connection went fine")
 
-    # group together the tasks for building the battles and wait
-    tasks = [buildEnv(i) for i in range(max_episode)]
-    environmentsList = await asyncio.gather(*tasks)
-
-    # then group together the actual battles and wait
-    tasks = []
-    for agentEnv, opponentEnv in environmentsList:
-        tasks += [runRandomAgent(agentEnv), runRandomAgent(opponentEnv)]
-
-    await asyncio.gather(*tasks)
-    
-async def mainSynchronous():
-    websocketUrl = "ws://localhost:8000/showdown/websocket"
-    agentSocket =  await websockets.connect(websocketUrl)
-    opponentSocket =  await websockets.connect(websocketUrl)
-    print("connection went fine")
-
-    agentEnv, opponentEnv = await buildEnv(0, False, agentSocket, opponentSocket)
-    
-    max_episode = 100
-    gamma = 0.99
-    step_size = 0.001
-    epsilon = 0.5
-
-    tasks = []
-
-    # tasks.append(runQLAgent(agentEnv, max_episode, gamma, step_size, epsilon))
-    # tasks.append(runGreedyAgent(agentEnv, './models/QL_model.npy', max_episode))
-    
-    #tasks.append(DQN.trainModel(agentEnv, max_episode, './models/DQN_model.pth'))
-    tasks.append(runGreedyDQNAgent(agentEnv, './models/DQN_model.pth', max_episode))
-    #tasks.append(runGreedyDQNAgent(opponentEnv, './models/DQN_model.pth', max_episode))
-    
-    #tasks.append(runRandomAgent(agentEnv, max_episode))
-    tasks.append(runRandomAgent(opponentEnv, max_episode))
+        # dqnAgentEnv, dqnOpponentEnv = await buildEnv("DQN", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
+        acAgentEnv, acOpponentEnv = await buildEnv("AC", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
+        #qlAgentEnv, qlOpponentEnv = await buildEnv("QL", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
         
-    await asyncio.gather(*tasks)
+        max_episode = 100
 
-async def buildEnv(i: int, isSeparate: bool = True, agentSocket: websockets.WebSocketClientProtocol = None, opponentSocket: websockets.WebSocketClientProtocol = None):
-    agentUsername = "agent"
-    opponentUsername = "opponent"
-    if isSeparate:
-        agentUsername += str(i)
-        opponentUsername += str(i)
+        tasks = []
+        
+        # TODO: Every time we start 
+        if g == 0:
+            # tasks.append(DQN.trainModel(dqnAgentEnv, max_episode))
+            # tasks.append(runRandomAgent(dqnOpponentEnv, max_episode))
+
+            tasks.append(AC.learnActorCritic(acAgentEnv, max_episode, learnFromPrevModel=False))
+            tasks.append(runRandomAgent(acOpponentEnv, max_episode))
+
+            # TODO: QL algo
+
+        else:
+            # tasks.append(DQN.trainModel(dqnAgentEnv, max_episode, './models/DQN_model.pth'))
+            # tasks.append(runGreedyDQNAgent(dqnOpponentEnv, './models/DQN_model.pth', max_episode))
+
+            tasks.append(AC.learnActorCritic(acAgentEnv, max_episode, learnFromPrevModel=True))
+            tasks.append(AC.runActorCritic(acOpponentEnv, max_episode))
+
+            # TODO: QL Algo
+
+            
+        await asyncio.gather(*tasks)
+
+
+
+async def buildEnv(algoName: str, agentSocket: websockets.WebSocketClientProtocol = None, opponentSocket: websockets.WebSocketClientProtocol = None):
+    agentUsername = algoName + "-agent"
+    opponentUsername = algoName + "-opponent"
     
-    agent = Agent(agentUsername, True, teamstr1)
-    opponent = Agent(opponentUsername, False, teamstr2)
+    agent = PlayerConfig(agentUsername, True, teamstr1)
+    opponent = PlayerConfig(opponentUsername, False, teamstr2)
 
     agentEngine = Engine(agent, opponent.username, agentSocket)
     opponentEngine = Engine(opponent, agent.username, opponentSocket)
 
-    await agentEngine.init(i == 0 or isSeparate)
-    await opponentEngine.init(i == 0 or isSeparate)
+    await agentEngine.init(True)
+    await opponentEngine.init(True)
 
     # agentEnv = PokemonBattleEnv(agentEngine, "human")
     agentEnv = PokemonBattleEnv(agentEngine)
@@ -132,36 +130,11 @@ async def runGreedyDQNAgent(env: PokemonBattleEnv, model_file, max_episode=1):
     await env.close()
 
     print(f"runGreedyNNAgent({env.engine.agent.username}) record:\ngames played: {max_episode}, wins: {wins}, losses {losses}, ties: {ties}: win percentage: {wins/max_episode}")
-
-
-async def runQLAgent(env: PokemonBattleEnv, max_episode=1, gamma=0.99, step_size=0.005, epsilon=0.1):
-    wins = 0
-    losses = 0
-
-    W = np.random.rand(env.observation_space.shape[0], env.action_space.n)
-
-    for i in range(max_episode):
-        s, info = await env.reset()
-        s = featurize(env, s)
-        terminated = truncated = False
-        while not (terminated or truncated):
-            a = greedyPolicy(s, W, env.valid_action_space_mask()) if np.random.random() < 1-epsilon else env.action_space.sample(env.valid_action_space_mask())
-            s_next, r, terminated, truncated, info = await env.step(a)
-            s_next = featurize(env, s_next)
-            W[:, a] = W[:, a] + step_size * (r+gamma*(1-terminated)*np.amax(W.T @ s_next) - (W.T@s)[a]) * s
-            s = s_next
-        wins, losses = wins+info["result"][0], losses+info["result"][1]
-
-    await env.close()
-
-    print(f"runQLAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
-
-    np.save('./models/QL_model.npy', W)
+    
 
 if __name__ == "__main__":
     start_time = time.time()
-    # asyncio.run(main())
-    asyncio.run(mainSynchronous())
+    asyncio.run(main())
     print(f"Elapsed time:", time.time()-start_time, "s")
 
 

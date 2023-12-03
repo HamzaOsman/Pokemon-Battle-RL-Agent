@@ -1,0 +1,28 @@
+Charizard @ Leftovers  
+Ability: Blaze  
+EVs: 252 Atk / 4 SpA / 252 Spe  
+Lonely Nature  
+- Dragon Dance  
+- Aerial Ace  
+- Rock Slide  
+- Fire Blast  
+
+Venusaur @ Leftovers  
+Ability: Overgrow  
+EVs: 252 SpA / 4 SpD / 252 Spe  
+Timid Nature  
+IVs: 2 Atk / 30 SpA / 30 Spe  
+- Razor Leaf  
+- Hidden Power [Fire]  
+- Leech Seed  
+- Sleep Powder  
+
+Blastoise @ Leftovers  
+Ability: Torrent  
+EVs: 252 HP / 252 SpA / 4 SpD  
+Modest Nature  
+IVs: 0 Atk  
+- Surf  
+- Ice Beam  
+- Rain Dance  
+- Rapid Spin  

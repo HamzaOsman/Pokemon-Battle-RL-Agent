@@ -124,6 +124,7 @@ class PokemonBattleEnv(gymnasium.Env):
         self._rendered = False
 
     async def reset(self, seed=None):
+        print("reset called!!")
         super().reset(seed=seed)
         # if self.engine.socket is not None:
         #     await self.engine.socket.close()
@@ -131,17 +132,20 @@ class PokemonBattleEnv(gymnasium.Env):
         self._rendered = False
 
         self.engine.resetBattle()
-
         await self.engine.startBattle()
-
+        print(self.engine.agent.username, "battle started!")
         await self.render()
-
-        return self._buildObservation(), {}
+        observation = self._buildObservation()
+        print(self.engine.agent.username, "observation built!")
+        return observation, {}
+    
 
 
     async def step(self, action):
+        print("step called!!")
         battleOrder = self._action_to_battleOrder(action)
         await self.engine.doAction(battleOrder)
+        print("awaited do action")
 
         observation = self._buildObservation()
 

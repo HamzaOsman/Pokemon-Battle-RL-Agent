@@ -67,7 +67,6 @@ def featurize(env: PokemonBattleEnv, x):
     x_normalized = (x - env.observation_space.low) / (env.observation_space.high - env.observation_space.low) # min-max normalization
     return x_normalized
 
-actionCounts = [0, 0, 0, 0, 0, 0, 0]
 async def learnActorCritic(
         env: PokemonBattleEnv,
         max_episodes=1,
@@ -75,6 +74,7 @@ async def learnActorCritic(
         actor_step_size=0.005,
         critic_step_size=0.005
         ):
+    actionCounts = [0, 0, 0, 0, 0, 0, 0]
     
     wins = 0
     losses = 0
@@ -134,6 +134,7 @@ async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = ".
     losses = 0
     ties = 0
     returns = np.zeros((numBattles))
+    actionCounts = [0, 0, 0, 0, 0, 0, 0]
 
     try:
         Theta = np.load(thetaModel)

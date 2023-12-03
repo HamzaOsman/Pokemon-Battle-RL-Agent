@@ -1,18 +1,25 @@
 import asyncio
+import threading
 import time
+from A2C_Agent import learnA2C
 
 import websockets
 # from a2c import runAdvantageActorCritic
 from actor_critic import learnActorCritic, runActorCritic
 from agent import Agent
 from engine import Engine
+from helpers import desynchronize
 from pokemon_battle_env import PokemonBattleEnv
 import numpy as np
 
-with open('teams/team1.txt') as f:
-    teamstr2 = f.read()
+import nest_asyncio
+nest_asyncio.apply()
 
-with open('teams/team2.txt') as f:
+
+# with open('teams/team1.txt') as f:
+#     teamstr2 = f.read()
+
+with open('teams/starters.txt') as f:
     teamstr1 = f.read()
 
 async def main():
@@ -29,59 +36,24 @@ async def main():
 
     await asyncio.gather(*tasks)
     
-async def runAgents(agentFunc, opponentFunc, max_episode=3000):
+def runAgents(agentFunc, opponentFunc, max_episode=3000):
     websocketUrl = "ws://localhost:8000/showdown/websocket"
-    agentSocket =  await websockets.connect(websocketUrl)
-    opponentSocket =  await websockets.connect(websocketUrl)
+    agentSocket =  desynchronize(websockets.connect(websocketUrl))
+    opponentSocket =  desynchronize(websockets.connect(websocketUrl))
     print("connection went fine")
 
-    agentEnv, opponentEnv = await buildEnv(0, False, agentSocket, opponentSocket)
-    
-    gamma = 0.99
-    step_size = 0.001
-    epsilon = 0.5
+    agentEnv, opponentEnv = desynchronize(buildEnv(0, False, agentSocket, opponentSocket))
+    print("building env went fine!!")
+    tasks = [
+        agentFunc(agentEnv, max_episode), 
+        opponentFunc(opponentEnv, max_episode)
+    ]
+    desynchronize(asyncio.gather(*tasks))
 
-    tasks = []
+def mainSynchronous():
+    print("LEARNING AC AGAINST RANDOM")
+    runAgents(learnA2C, runRandomAgent, 6000)
 
-    agentEnv, opponentEnv = await buildEnv(0, False, agentSocket, opponentSocket)
-    tasks.append(agentFunc(agentEnv, max_episode))
-    tasks.append(opponentFunc(opponentEnv, max_episode))
-    await asyncio.gather(*tasks)
-
-async def mainSynchronous():
-    websocketUrl = "ws://localhost:8000/showdown/websocket"
-    agentSocket =  await websockets.connect(websocketUrl)
-    opponentSocket =  await websockets.connect(websocketUrl)
-    print("connection went fine")
-
-    # agentEnv, opponentEnv = await buildEnv(0, False, agentSocket, opponentSocket)
-    
-    # max_episode = 3000
-    # gamma = 0.99
-    # step_size = 0.001
-    # epsilon = 0.5
-
-    # tasks = []
-
-    # tasks.append(runQLAgent(agentEnv, max_episode, gamma, step_size, epsilon))
-    # tasks.append(runGreedyAgent(agentEnv, './models/QL_model.npy', max_episode))
-
-    # tasks.append(runRandomAgent(agentEnv, max_episode))
-
-    # print("LEARNING AC AGAINST RANDOM")
-    # await runAgents(learnActorCritic, runRandomAgent)
-
-    # print("PLAYING RANDOM-LEARNED-AC AGAINST RANDOM")
-    # await runAgents(runActorCritic, runRandomAgent)
-
-    # print("PLAYING RANDOM-LEARNED-AC AGAINST RANDOM-LEARNED-AC")
-    # await runAgents(runActorCritic, runActorCritic)
-
-    print("LEARNING AC AGAINST RANDOM-LEARNED-AC")
-    await runAgents(learnActorCritic, runActorCritic, 10000)
-
-    print("PLAYING AC-LEARNED-AC AGAINST AC-LEARNED-AC")
-    await runAgents(runActorCritic, runActorCritic)
 
 
 async def buildEnv(i: int, isSeparate: bool = True, agentSocket: websockets.WebSocketClientProtocol = None, opponentSocket: websockets.WebSocketClientProtocol = None):
@@ -99,7 +71,7 @@ async def buildEnv(i: int, isSeparate: bool = True, agentSocket: websockets.WebS
 
     await agentEngine.init(i == 0 or isSeparate)
     await opponentEngine.init(i == 0 or isSeparate)
-
+    print("init went fine!!")
     # agentEnv = PokemonBattleEnv(agentEngine, "human")
     agentEnv = PokemonBattleEnv(agentEngine)
     opponentEnv = PokemonBattleEnv(opponentEngine)
@@ -107,17 +79,19 @@ async def buildEnv(i: int, isSeparate: bool = True, agentSocket: websockets.WebS
     return agentEnv, opponentEnv
 
 async def runRandomAgent(env: PokemonBattleEnv, max_episode=1):
+    print("running random agent??")
     wins = 0
     losses = 0
     for ep in range(max_episode):
-        observation, info = await env.reset()
+        print("running random agent??", ep)
+        observation, info = desynchronize(env.reset())
         while True:
             randoAction = env.action_space.sample(env.valid_action_space_mask())
-            observation, reward, terminated, t, info = await env.step(randoAction)
+            observation, reward, terminated, t, info = desynchronize(env.step(randoAction))
             if terminated: 
                 wins, losses = wins+info["result"][0], losses+info["result"][1]
                 break
-    await env.close()
+    desynchronize(env.close())
     print(f"runRandomAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
 
 def greedyPolicy(x, W, action_mask):
@@ -179,7 +153,7 @@ async def runQLAgent(env: PokemonBattleEnv, max_episode=1, gamma=0.99, step_size
 if __name__ == "__main__":
     start_time = time.time()
     # asyncio.run(main())
-    asyncio.run(mainSynchronous())
+    mainSynchronous()
     print(f"Elapsed time:", time.time()-start_time, "s")
 
 

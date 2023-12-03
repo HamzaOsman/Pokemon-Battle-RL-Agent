@@ -46,6 +46,7 @@ class Engine:
         await self.socket.send("|".join([room, message]))
 
     async def _logPlayerIn(self):
+        print(self.agent.username, "being logged in!")
         await self._sendMessage(f"/trn {self.agent.username},0,")
 
     async def _setTeam(self):
@@ -54,6 +55,7 @@ class Engine:
 
     async def startBattle(self):
         await self._setTeam()
+
         if self.agent.isChallenger:
             challengeMsg = f"/challenge {self.opponentUsername}, {Engine.battleFormat}"
         else:
@@ -61,8 +63,11 @@ class Engine:
             await self._waitUntilChallenge()
 
         await self._sendMessage(challengeMsg)
+        print("starting battle4!")
 
         await self.parseInitialBattle()
+        print("starting battle5!")
+
         # print("battle started!")
 
     async def parseInitialBattle(self):
@@ -71,6 +76,7 @@ class Engine:
             message = await self.socket.recv()
             messageSplit = message.split("|")
             isInit = messageSplit[1] == "init" or isInit
+            # print(self.agent.username, "getting msg...", message)
             # if not isInit:
             #     print("this is not init:")
             #     print(message)
@@ -110,6 +116,7 @@ class Engine:
 
 
     async def doAction(self, action: BattleOrder) -> Battle:
+        print(self.agent.username, "took action", action.message)
         roomId = self.battle.battle_tag
         agentMsg = action.message
        

@@ -1,5 +1,6 @@
 import asyncio
 import time
+from typing import List
 
 import websockets
 
@@ -9,71 +10,57 @@ from player_config import PlayerConfig
 from engine import Engine
 from pokemon_battle_env import PokemonBattleEnv
 import numpy as np
+import configparser
 
-with open('teams/team3.txt') as f:
-    teamstr1 = f.read()
+config = configparser.ConfigParser()
+config.read('config.ini')
 
-with open('teams/team3.txt') as f:
-    teamstr2 = f.read()
+try:
+    with open(config.get("Battle Configuration", "team1_file_path")) as f:
+        teamstr1 = f.read()
+
+    with open(config.get("Battle Configuration", "team2_file_path")) as f:
+        teamstr2 = f.read()
+except:
+    teamstr1 = None
+    teamstr2 = None
 
 async def main():
-    for g in range(2):
-        print("\nGeneration: ", g+1)
-        websocketUrl = "ws://localhost:8000/showdown/websocket"
-        # agentSocket =  await websockets.connect(websocketUrl)
-        # opponentSocket =  await websockets.connect(websocketUrl)
-        print("connection went fine")
+    agentMode = config.get("Agent Configuration", "mode")
+    agentAlgos = config.get("Agent Configuration", "algorithms").split(", ")
 
-        # dqnAgentEnv, dqnOpponentEnv = await buildEnv("DQN", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
-        acAgentEnv, acOpponentEnv = await buildEnv("AC", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
-        #qlAgentEnv, qlOpponentEnv = await buildEnv("QL", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
-        
-        max_episode = 100
-
-        tasks = []
-        
-        # TODO: Every time we start 
-        if g == 0:
-            # tasks.append(DQN.trainModel(dqnAgentEnv, max_episode))
-            # tasks.append(runRandomAgent(dqnOpponentEnv, max_episode))
-
-            tasks.append(AC.learnActorCritic(acAgentEnv, max_episode, learnFromPrevModel=False))
-            tasks.append(runRandomAgent(acOpponentEnv, max_episode))
-
-            # TODO: QL algo
-
-        else:
-            # tasks.append(DQN.trainModel(dqnAgentEnv, max_episode, './models/DQN_model.pth'))
-            # tasks.append(runGreedyDQNAgent(dqnOpponentEnv, './models/DQN_model.pth', max_episode))
-
-            tasks.append(AC.learnActorCritic(acAgentEnv, max_episode, learnFromPrevModel=True))
-            tasks.append(AC.runActorCritic(acOpponentEnv, max_episode))
-
-            # TODO: QL Algo
-
-            
-        await asyncio.gather(*tasks)
-
+    if  agentMode == "play":
+        humanPlayerUsername = config.get("Player Configuration", "player_username")
+        await playVsAgent(agentAlgos, humanPlayerUsername)
+    elif agentMode == "train":
+        numGens = int(config.get("Agent Configuration", "num_generations"))
+        numBattles = int(config.get("Agent Configuration", "num_episodes"))
+        await trainAgents(agentAlgos, numGens, numBattles)
 
 
 async def buildEnv(algoName: str, agentSocket: websockets.WebSocketClientProtocol = None, opponentSocket: websockets.WebSocketClientProtocol = None):
+    agentTeamSize = int(config.get("Battle Configuration", "agent_team_size"))
+    opponentTeamSize = int(config.get("Battle Configuration", "opponent_team_size"))
+    battleFormat = config.get("Battle Configuration", "battle_format")
+
     agentUsername = algoName + "-agent"
     opponentUsername = algoName + "-opponent"
     
     agent = PlayerConfig(agentUsername, True, teamstr1)
     opponent = PlayerConfig(opponentUsername, False, teamstr2)
 
-    agentEngine = Engine(agent, opponent.username, agentSocket)
-    opponentEngine = Engine(opponent, agent.username, opponentSocket)
+    agentEngine = Engine(agent, opponent.username, battleFormat, agentSocket)
+    opponentEngine = Engine(opponent, agent.username, battleFormat, opponentSocket)
 
     await agentEngine.init(True)
     await opponentEngine.init(True)
 
     # agentEnv = PokemonBattleEnv(agentEngine, "human")
-    agentEnv = PokemonBattleEnv(agentEngine)
-    opponentEnv = PokemonBattleEnv(opponentEngine)
+    agentEnv = PokemonBattleEnv(agentEngine, agentTeamSize, opponentTeamSize)
+    opponentEnv = PokemonBattleEnv(opponentEngine, opponentTeamSize, agentTeamSize)
 
     return agentEnv, opponentEnv
+
 
 async def runRandomAgent(env: PokemonBattleEnv, max_episode=1):
     wins = 0
@@ -89,52 +76,87 @@ async def runRandomAgent(env: PokemonBattleEnv, max_episode=1):
     await env.close()
     print(f"runRandomAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
 
-def greedyPolicy(x, W, action_mask):
-    valid_actions = np.where(action_mask)[0]
-    return valid_actions[np.argmax((W.T @ x)[valid_actions])]
 
 def featurize(env: PokemonBattleEnv, x):
     x_normalized = (x - env.observation_space.low) / (env.observation_space.high - env.observation_space.low) # min-max normalization
     return x_normalized
 
-async def runGreedyAgent(env: PokemonBattleEnv, model_file, max_episode=1):
-    wins = 0
-    losses = 0
 
-    try:
-        W = np.load(model_file)
-    except:
-        print(f"model file \'{model_file}\' not found!")
-        exit()
+# Human playing against agent(s)
+async def playVsAgent(algos: List[str], opponentUsername: str):
+    agentTeamSize = int(config.get("Battle Configuration", "agent_team_size"))
+    opponentTeamSize = int(config.get("Battle Configuration", "opponent_team_size"))
+    battleFormat = config.get("Battle Configuration", "battle_format")
+    agentTasks = []
+    # AC, DQN, QL
+    for algo in algos:
+        agentUsername = algo + "-agent"
+        
+        agent = PlayerConfig(agentUsername, True, teamstr1)
+        agentEngine = Engine(agent, opponentUsername, battleFormat, await websockets.connect("ws://localhost:8000/showdown/websocket"))
 
-    for i in range(max_episode):
-        s, info = await env.reset()
-        terminated = truncated = False
-        while not (terminated or truncated):
-            a = greedyPolicy(s, W, env.valid_action_space_mask())
-            s_next, r, terminated, truncated, info = await env.step(a)
-            s = s_next
-        wins, losses = wins+info["result"][0], losses+info["result"][1]
+        await agentEngine.init(True)
 
-    await env.close()
+        agentEnv = PokemonBattleEnv(agentEngine, agentTeamSize, opponentTeamSize)    
 
-    print(f"runGreedyAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
-
-async def runGreedyDQNAgent(env: PokemonBattleEnv, model_file, max_episode=1):
-    wins = 0
-    losses = 0
-    ties = 0
-
-    model = DQN.loadModel(env, model_file)
-    wins, losses, ties  = await DQN.testModel(env, model, max_episode)
-    await env.close()
-
-    print(f"runGreedyNNAgent({env.engine.agent.username}) record:\ngames played: {max_episode}, wins: {wins}, losses {losses}, ties: {ties}: win percentage: {wins/max_episode}")
+        if algo == "DQN":
+            agentTasks.append(DQN.runGreedyDQNAgent(agentEnv, './models/DQN_model.pth', 1))
+        elif algo == "AC":
+            agentTasks.append(AC.runActorCritic(agentEnv, 1))
+        elif algo == "QL":
+            agentTasks.append(QL.runGreedyQLAgent(agentEnv, "./models/QL_model.npy", 1))
+        else:
+            raise Exception("Trying to play against an unknown agent algorithm!")
+        
+    await asyncio.gather(*agentTasks)
     
+# Agents learning generationally
+async def trainAgents(algos, numGenerations = 2, numBattles = 100):
+    for g in range(numGenerations):
+        print("\nGeneration: ", g+1)
+        websocketUrl = "ws://localhost:8000/showdown/websocket"
+
+        if("DQN" in algos):
+            dqnAgentEnv, dqnOpponentEnv = await buildEnv("DQN", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
+        if("AC" in algos):
+            acAgentEnv, acOpponentEnv = await buildEnv("AC", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
+        if("QL" in algos):
+            qlAgentEnv, qlOpponentEnv = await buildEnv("QL", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
+        print("connection went fine, probably")
+        
+        tasks = []
+        
+        # TODO: Every time we start 
+        if g == 0:
+            if("DQN" in algos):
+                tasks.append(DQN.trainModel(dqnAgentEnv, numBattles))
+                tasks.append(runRandomAgent(dqnOpponentEnv, numBattles))
+
+            if("AC" in algos):
+                tasks.append(AC.learnActorCritic(acAgentEnv, numBattles, learnFromPrevModel=False))
+                tasks.append(runRandomAgent(acOpponentEnv, numBattles))
+
+            if("QL" in algos):
+                tasks.append(QL.runQLAgent(qlAgentEnv, numBattles))
+                tasks.append(runRandomAgent(qlOpponentEnv, numBattles))
+
+        else:
+            print("not gen 0")
+            if("DQN" in algos):
+                tasks.append(DQN.trainModel(dqnAgentEnv, numBattles, './models/DQN_model.pth'))
+                tasks.append(DQN.runGreedyDQNAgent(dqnOpponentEnv, './models/DQN_model.pth', numBattles))
+
+            if("AC" in algos):
+                tasks.append(AC.learnActorCritic(acAgentEnv, numBattles, learnFromPrevModel=True))
+                tasks.append(AC.runActorCritic(acOpponentEnv, numBattles))
+
+            if("QL" in algos):
+                # TODO: QL should have a way to start learning from a saved model
+                tasks.append(QL.runQLAgent(qlAgentEnv, numBattles))
+                tasks.append(QL.runGreedyQLAgent(qlOpponentEnv, "./models/QL_model.npy", numBattles))
+        await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
     start_time = time.time()
     asyncio.run(main())
     print(f"Elapsed time:", time.time()-start_time, "s")
-
-

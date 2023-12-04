@@ -70,8 +70,8 @@ async def learnActorCritic(
         env: PokemonBattleEnv,
         max_episodes=1,
         gamma=0.99,
-        actor_step_size=0.005,
-        critic_step_size=0.005,
+        actor_step_size=0.01,
+        critic_step_size=0.01,
         thetaModel = "./models/AC_model_Theta.npy", 
         wModel = "./models/AC_model_w.npy",
         learnFromPrevModel = False
@@ -134,7 +134,7 @@ async def learnActorCritic(
         returns[i] = rewardSum
         rewardSum = 0
 
-    print(f"learnActorCritic record:\ngames played: {(wins+losses)}, wins: {wins}, losses: {losses}, win percentage: {wins/(wins+losses)}")
+    print(f"learnActorCritic record:\ngames played: {(wins+losses)}, wins: {wins}, losses: {losses}, win percentage: {wins/(wins+losses+ties)}")
     print("how many times was each action taken by the agent?", actionCounts)
     print("sum of returns", np.sum(returns))
 
@@ -177,7 +177,6 @@ async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = ".
         s = featurize(env, s)
         terminated = truncated = False
         rewardSum = 0
-        print("run actor critic battle number", i)
         while not (terminated or truncated):
             # choose action
             actionMask = env.valid_action_space_mask()
@@ -189,12 +188,11 @@ async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = ".
             observation, reward, terminated, truncated, info = await env.step(action)
             rewardSum += reward
             s = featurize(env, observation)
-        print("Finished battle", i, "!!!")
         wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+info["result"][2]
         returns[i] = rewardSum
         rewardSum = 0
 
-    print(f"actor critic record:\ngames played: {(wins+losses)}, wins: {wins}, losses: {losses}, win percentage: {wins/(wins+losses)}")
+    print(f"actor critic record:\ngames played: {(wins+losses)}, wins: {wins}, losses: {losses}, win percentage: {wins/(wins+losses+ties)}")
     print("how many times was each action taken by the agent?", actionCounts)
     print("sum of returns", np.sum(returns))
     # plt.scatter(range(len(returns)), returns)

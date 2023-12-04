@@ -13,14 +13,13 @@ from player_config import PlayerConfig
 
 # engine which manages the battle
 class Engine:
-    # battleFormat: str = "gen3randombattle"
-    battleFormat: str = "gen3ou"
 
-    def __init__(self, agent: PlayerConfig, opponentUsername: str, socket: websockets.WebSocketClientProtocol = None):
+    def __init__(self, agent: PlayerConfig, opponentUsername: str, battleFormat: str, socket: websockets.WebSocketClientProtocol = None):
         self.battle: Battle = None
         self.agent = agent
         self.orderedPartyPokemon = []
         self.opponentUsername = opponentUsername
+        self.battleFormat = battleFormat
         self.socket = socket
 
     async def init(self, logPlayerIn: bool):
@@ -55,7 +54,7 @@ class Engine:
     async def startBattle(self):
         await self._setTeam()
         if self.agent.isChallenger:
-            challengeMsg = f"/challenge {self.opponentUsername}, {Engine.battleFormat}"
+            challengeMsg = f"/challenge {self.opponentUsername}, {self.battleFormat}"
         else:
             challengeMsg = "/accept %s" % self.opponentUsername
             await self._waitUntilChallenge()
@@ -203,7 +202,7 @@ class Engine:
         
         battle_tag = "-".join(split_message)[1:]
 
-        gen = GenData.from_format(Engine.battleFormat).gen
+        gen = GenData.from_format(self.battleFormat).gen
         battle = Battle(
             battle_tag=battle_tag,
             username=self.agent.username,

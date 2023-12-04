@@ -34,10 +34,10 @@ class PokemonBattleEnv(gymnasium.Env):
     abilityNums = json.load(open("./data/ability_nums.json", 'r'))
     itemNums = json.load(open("./data/item_nums.json", 'r'))
     
-    def __init__(self, engine: Engine, render_mode=None):
+    def __init__(self, engine: Engine, agent_team_size: int, opponent_team_size: int, render_mode=None):
         self.engine = engine
-        self.TEAM_SIZE = 3 # TODO: dynamically set to friendly team size
-        self.ENEMY_TEAM_SIZE = 3 # TODO: dynamically set to enemy team size
+        self.TEAM_SIZE = agent_team_size
+        self.ENEMY_TEAM_SIZE = opponent_team_size
 
         #WIP
         #Game state
@@ -335,11 +335,11 @@ class PokemonBattleEnv(gymnasium.Env):
                 reward -= 1 * (enemy.current_hp/enemy.max_hp)
 
         if self.engine.battle.won is None:
-            reward -= 5
+            reward -= 15
         elif self.engine.battle.won:
-            reward += 10
+            reward += 20
         else:
-            reward -= 10
+            reward -= 20
         # on ties this would also do -100?
         # reward += 100 if self.engine.battle.won else -100
 

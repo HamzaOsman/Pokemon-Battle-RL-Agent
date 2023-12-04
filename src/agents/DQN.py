@@ -183,6 +183,18 @@ async def testModel(env: PokemonBattleEnv, model: DQN, max_episodes=1):
 
     return wins, losses, ties
 
+async def runGreedyDQNAgent(env: PokemonBattleEnv, model_file, max_episode=1):
+    wins = 0
+    losses = 0
+    ties = 0
+
+    model = loadModel(env, model_file)
+    wins, losses, ties  = await testModel(env, model, max_episode)
+    await env.close()
+
+    print(f"runGreedyNNAgent({env.engine.agent.username}) record:\ngames played: {max_episode}, wins: {wins}, losses {losses}, ties: {ties}: win percentage: {wins/max_episode}")
+    
+
 def loadModel(env: PokemonBattleEnv, model_path: str):
     try:
         model = DQN(env.observation_space.shape[0], env.action_space.n)

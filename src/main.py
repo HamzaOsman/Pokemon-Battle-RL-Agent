@@ -10,44 +10,46 @@ from engine import Engine
 from pokemon_battle_env import PokemonBattleEnv
 import numpy as np
 
-with open('teams/team3.txt') as f:
+with open('teams/team5.txt') as f:
     teamstr1 = f.read()
 
-with open('teams/team3.txt') as f:
+with open('teams/team5.txt') as f:
     teamstr2 = f.read()
 
 async def main():
-    for g in range(2):
+    for g in range(1):
         print("\nGeneration: ", g+1)
         websocketUrl = "ws://localhost:8000/showdown/websocket"
         # agentSocket =  await websockets.connect(websocketUrl)
         # opponentSocket =  await websockets.connect(websocketUrl)
         print("connection went fine")
 
-        # dqnAgentEnv, dqnOpponentEnv = await buildEnv("DQN", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
-        acAgentEnv, acOpponentEnv = await buildEnv("AC", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
+        dqnAgentEnv, dqnOpponentEnv = await buildEnv("DQN", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
+        # acAgentEnv, acOpponentEnv = await buildEnv("AC", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
         #qlAgentEnv, qlOpponentEnv = await buildEnv("QL", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
         
-        max_episode = 100
+        max_episode = 1000
 
         tasks = []
         
         # TODO: Every time we start 
         if g == 0:
-            # tasks.append(DQN.trainModel(dqnAgentEnv, max_episode))
-            # tasks.append(runRandomAgent(dqnOpponentEnv, max_episode))
+            tasks.append(runRandomAgent(dqnAgentEnv, max_episode))
 
-            tasks.append(AC.learnActorCritic(acAgentEnv, max_episode, learnFromPrevModel=False))
-            tasks.append(runRandomAgent(acOpponentEnv, max_episode))
+            #tasks.append(DQN.trainModel(dqnAgentEnv, max_episode))
+            tasks.append(runRandomAgent(dqnOpponentEnv, max_episode))
+
+            # tasks.append(AC.learnActorCritic(acAgentEnv, max_episode, learnFromPrevModel=False))
+            # tasks.append(runRandomAgent(acOpponentEnv, max_episode))
 
             # TODO: QL algo
 
         else:
-            # tasks.append(DQN.trainModel(dqnAgentEnv, max_episode, './models/DQN_model.pth'))
-            # tasks.append(runGreedyDQNAgent(dqnOpponentEnv, './models/DQN_model.pth', max_episode))
+            tasks.append(DQN.trainModel(dqnAgentEnv, max_episode, './models/DQN_model.pth'))
+            tasks.append(runGreedyDQNAgent(dqnOpponentEnv, './models/DQN_model.pth', max_episode))
 
-            tasks.append(AC.learnActorCritic(acAgentEnv, max_episode, learnFromPrevModel=True))
-            tasks.append(AC.runActorCritic(acOpponentEnv, max_episode))
+            #tasks.append(AC.learnActorCritic(acAgentEnv, max_episode, learnFromPrevModel=True))
+            #tasks.append(AC.runActorCritic(acOpponentEnv, max_episode))
 
             # TODO: QL Algo
 

@@ -6,6 +6,7 @@ gym==0.26.2
 gym-notices==0.0.8
 gymnasium==0.29.1
 idna==3.4
+matplotlib==3.8.2
 numpy==1.26.1
 orjson==3.9.10
 poke-env==0.7.1

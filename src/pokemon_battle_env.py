@@ -172,7 +172,11 @@ class PokemonBattleEnv(gymnasium.Env):
         if (not self.engine.battle.force_switch and len(self.engine.battle.available_moves) > 0):
             available_moves_ids = [move.id for move in self.engine.battle.available_moves]
             if ("struggle" not in available_moves_ids):
-                action_mask[1:5] = [1 if move.id in available_moves_ids else 0 for move in self.engine.battle.active_pokemon.moves.values()]
+                i = 0
+                for i, move in enumerate(self.engine.battle.active_pokemon.moves.values()):
+                    action_mask[1+i] = 1 if move.id in available_moves_ids else 0
+                i+=1
+                action_mask[1+i:5] = [0] #Pokemons with < 4 moves
             else:
                 # add defaultBattleOrder (struggle) when no valid moves
                 action_mask[0] = 1 
@@ -229,7 +233,7 @@ class PokemonBattleEnv(gymnasium.Env):
         for pokemon in [battleState.active_pokemon]+self.engine.orderedPartyPokemon:
             # build friendly pokemon observation
             friendlyPokemon = [
-                PokemonBattleEnv.itemNums[pokemon.item] if (pokemon.item is not None) else NONE_ITEM,
+                PokemonBattleEnv.itemNums[pokemon.item] if (pokemon.item is not None and pokemon.item != '') else NONE_ITEM,
                 PokemonBattleEnv.abilityNums[pokemon.ability],
                 pokemon.types[0].value, 
                 pokemon.types[1].value if (pokemon.types[1] is not None) else NONE_TYPE,
@@ -244,6 +248,8 @@ class PokemonBattleEnv(gymnasium.Env):
             # include all 4 moves
             for value in pokemon.moves.values():
                 friendlyPokemon+= self._createMove(value)            
+
+            friendlyPokemon+= (4-len(pokemon.moves)) * [UNKNOWN_TYPE, UNKNOWN_CATEGORY, UNKNOWN_PP, UNKNOWN_POWER, UNKNOWN_ACCURACY, UNKNOWN_PRIORITY] 
 
             if (pokemon.species == battleState.active_pokemon.species):
                 activeFriendlyPokemon = list(pokemon.boosts.values()) + friendlyPokemon
@@ -309,7 +315,8 @@ class PokemonBattleEnv(gymnasium.Env):
             *opponentSide
         ]
 
-        return np.array(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game)
+        obs = np.array(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game)
+        return obs
 
     def _determineReward(self):
         # TODO: intermittent rewards? need to keep track of previous state to compare to

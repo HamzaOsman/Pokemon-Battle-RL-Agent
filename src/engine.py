@@ -1,6 +1,8 @@
 import asyncio
 from logging import Logger
 import orjson
+import json
+import requests
 from poke_env import ShowdownException
 from poke_env.player import BattleOrder
 from poke_env.environment.battle import Battle
@@ -45,11 +47,55 @@ class Engine:
         await self.socket.send("|".join([room, message]))
 
     async def _logPlayerIn(self):
-        await self._sendMessage(f"/trn {self.agent.username},0,")
+        if self.agent.password:
+            while True:
+                message = await self.socket.recv()
+                split_messages = [m.split("|") for m in message.split("\n")]
+                if (split_messages[0][1] == "challstr"):
+                    log_in_request = requests.post(
+                        "https://play.pokemonshowdown.com/action.php?",
+                        data={
+                            "act": "login",
+                            "name": self.agent.username,
+                            "pass": self.agent.password,
+                            "challstr": split_messages[0][2] + "%7C" + split_messages[0][3],
+                        },
+                    )
+                    assertion = json.loads(log_in_request.text[1:])["assertion"]
+                    break
+        else:
+            assertion = ""
+        await self._sendMessage(f"/trn {self.agent.username},0,{assertion}")
+        message = await self.socket.recv()
+        # await self._sendMessage(f"/trn {self.agent.username},0,")
 
     async def _setTeam(self):
         # print("setting team:", "/utm %s" % player.team)
         await self._sendMessage("/utm %s" % self.agent.team)
+
+    async def initBattle(self):
+        containsDitto = True
+        while (containsDitto):
+            self.resetBattle()
+            await self.startBattle()
+            containsDitto = self._checkForDitto()
+            msg = "ditto: yes" if containsDitto else "ditto: no"
+            await self._sendMessage(msg, self.battle.battle_tag)
+            if (containsDitto):
+                await self._sendMessage("/forfeit", self.battle.battle_tag)
+            while True:
+                msg = await self.socket.recv()
+                print(msg)
+                split_msg = [m.split("|") for m in msg.split("\n")][1]
+                if(split_msg[1].startswith("c") and split_msg[2].endswith(self.opponentUsername)):
+                    containsDitto = containsDitto or split_msg[3] == "ditto: yes"
+                    break
+    
+    def _checkForDitto(self):
+        for pokemon in self.battle.team.values():
+            if (pokemon.species=="ditto"):
+                return True
+        return False
 
     async def startBattle(self):
         await self._setTeam()
@@ -62,7 +108,6 @@ class Engine:
         await self._sendMessage(challengeMsg)
 
         await self.parseInitialBattle()
-        # print("battle started!")
 
     async def parseInitialBattle(self):
         isInit = False

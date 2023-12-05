@@ -46,8 +46,8 @@ async def buildEnv(algoName: str, agentSocket: websockets.WebSocketClientProtoco
     agentUsername = algoName + "-agent"
     opponentUsername = algoName + "-opponent"
     
-    agent = PlayerConfig(agentUsername, True, teamstr1)
-    opponent = PlayerConfig(opponentUsername, False, teamstr2)
+    agent = PlayerConfig(agentUsername, True, teamstr1, config.get("Agent Configuration", "password"))
+    opponent = PlayerConfig(opponentUsername, False, teamstr2, config.get("Agent Configuration", "password"))
 
     agentEngine = Engine(agent, opponent.username, battleFormat, agentSocket)
     opponentEngine = Engine(opponent, agent.username, battleFormat, opponentSocket)

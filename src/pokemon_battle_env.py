@@ -132,14 +132,12 @@ class PokemonBattleEnv(gymnasium.Env):
 
         self._rendered = False
 
-        self.engine.resetBattle()
-
-        await self.engine.startBattle()
+        await self.engine.initBattle()
 
         await self.render()
 
         return self._buildObservation(), {}
-
+            
 
     async def step(self, action):
         battleOrder = self._action_to_battleOrder(action)

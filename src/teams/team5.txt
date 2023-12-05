@@ -1,0 +1,22 @@
+Ditto @ Metal Powder  
+Ability: Limber  
+EVs: 248 HP / 8 Atk / 252 Spe  
+Jolly Nature  
+IVs: 30 Atk  
+- Transform  
+
+Unown @ Choice Band  
+Ability: Levitate  
+EVs: 252 HP / 252 Atk / 4 SpD  
+Adamant Nature  
+- Hidden Power [Fighting]  
+
+Celebi @ Choice Band  
+Ability: Natural Cure  
+EVs: 252 HP / 220 Def / 36 Spe  
+Bold Nature  
+IVs: 0 Atk  
+- Heal Bell  
+- Baton Pass  
+- Light Screen  
+- Swords Dance  

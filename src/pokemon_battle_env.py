@@ -119,7 +119,7 @@ class PokemonBattleEnv(gymnasium.Env):
         
         # +1 representing defaultAction (struggle) when no other actions are valid
         self.action_space = Discrete(4+(self.TEAM_SIZE-1)+1)
-        self.reward_range = (-50-self.TEAM_SIZE-self.ENEMY_TEAM_SIZE, 50+self.TEAM_SIZE+self.ENEMY_TEAM_SIZE)
+        # self.reward_range = (-50-self.TEAM_SIZE-self.ENEMY_TEAM_SIZE, 50+self.TEAM_SIZE+self.ENEMY_TEAM_SIZE)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -322,7 +322,7 @@ class PokemonBattleEnv(gymnasium.Env):
         # TODO: intermittent rewards? need to keep track of previous state to compare to
 
         if not self.engine.battle._finished: 
-            return 0
+            return -1
        
         reward = 0
         
@@ -342,11 +342,11 @@ class PokemonBattleEnv(gymnasium.Env):
                 reward -= 1 * (enemy.current_hp/enemy.max_hp)
 
         if self.engine.battle.won is None:
-            reward -= 15
+            reward -= 25
         elif self.engine.battle.won:
-            reward += 20
+            reward += 100
         else:
-            reward -= 20
+            reward -= 100
         # on ties this would also do -100?
         # reward += 100 if self.engine.battle.won else -100
 

@@ -141,7 +141,6 @@ async def trainAgents(algos, numGenerations = 2, numBattles = 100):
                 tasks.append(runRandomAgent(qlOpponentEnv, numBattles))
 
         else:
-            print("not gen 0")
             if("DQN" in algos):
                 tasks.append(DQN.trainModel(dqnAgentEnv, numBattles, './models/DQN_model.pth'))
                 tasks.append(DQN.runGreedyDQNAgent(dqnOpponentEnv, './models/DQN_model.pth', numBattles))

@@ -70,13 +70,13 @@ async def learnActorCritic(
         env: PokemonBattleEnv,
         max_episodes=1,
         gamma=0.99,
-        actor_step_size=0.01,
-        critic_step_size=0.01,
+        actor_step_size=0.008,
+        critic_step_size=0.008,
         thetaModel = "./models/AC_model_Theta.npy", 
         wModel = "./models/AC_model_w.npy",
         learnFromPrevModel = False
         ):
-    actionCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    # actionCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
     wins = 0
     losses = 0
@@ -112,7 +112,7 @@ async def learnActorCritic(
             actionMask = env.valid_action_space_mask()
             action = softmaxPolicy(s, Theta, actionMask)
 
-            actionCounts[action] += 1
+            # actionCounts[action] += 1
             
             # take step 
             observation, reward, terminated, truncated, info = await env.step(action)
@@ -135,8 +135,8 @@ async def learnActorCritic(
         rewardSum = 0
 
     print(f"learnActorCritic record:\ngames played: {(wins+losses)}, wins: {wins}, losses: {losses}, win percentage: {wins/(wins+losses+ties)}")
-    print("how many times was each action taken by the agent?", actionCounts)
-    print("sum of returns", np.sum(returns))
+    # print("how many times was each action taken by the agent?", actionCounts)
+    # print("sum of returns", np.sum(returns))
 
     # Dont update bad model
     thetaFileStr = './models/AC_model_Theta.npy'
@@ -158,7 +158,7 @@ async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = ".
     losses = 0
     ties = 0
     returns = np.zeros((numBattles))
-    actionCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    # actionCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
     try:
         Theta = np.load(thetaModel)
@@ -182,7 +182,7 @@ async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = ".
             actionMask = env.valid_action_space_mask()
             action = softmaxPolicy(s, Theta, actionMask)
 
-            actionCounts[action] += 1
+            # actionCounts[action] += 1
             
             # take step 
             observation, reward, terminated, truncated, info = await env.step(action)
@@ -193,8 +193,8 @@ async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = ".
         rewardSum = 0
 
     print(f"actor critic record:\ngames played: {(wins+losses)}, wins: {wins}, losses: {losses}, win percentage: {wins/(wins+losses+ties)}")
-    print("how many times was each action taken by the agent?", actionCounts)
-    print("sum of returns", np.sum(returns))
+    # print("how many times was each action taken by the agent?", actionCounts)
+    # print("sum of returns", np.sum(returns))
     # plt.scatter(range(len(returns)), returns)
     # plt.xlabel("battle")
     # plt.ylabel("return")

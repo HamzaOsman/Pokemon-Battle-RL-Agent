@@ -111,7 +111,17 @@ class Engine:
     async def doAction(self, action: BattleOrder) -> Battle:
         roomId = self.battle.battle_tag
         agentMsg = action.message
-       
+
+        '''
+        If a ditto transforms into a species which you have in your party, showdown is unable ot switch from ditto to that
+        pokemon using the species name.
+        '''
+        if agentMsg.startswith("/choose switch"):
+            for index, pokemon in enumerate(self.orderedPartyPokemon):
+                if pokemon.species == action.order.species:
+                    agentMsg = agentMsg.replace(pokemon.species, str(index+2))
+                    break
+            
         # send the agent and possibly the opponents decision to the socket
         await self._sendMessage(agentMsg, roomId)
         await self._parseBattle()
@@ -160,10 +170,17 @@ class Engine:
                     # comes from pokemon showdown, true order
                     for pokemon in side["pokemon"]:
                         if pokemon:
-                            pokemon = battle.team[pokemon["ident"]]
+                            pokemonObj = battle.team[pokemon["ident"]]
+
+                            # fix ditto moveset
+                            if (pokemonObj.species == "ditto" and pokemonObj.active):
+                                setattr(pokemonObj, '_moves', {})
+                                for move in pokemon["moves"]:
+                                    pokemonObj._add_move(move)
+                            
                             # print("active?", pokemon.active, "fainted?", pokemon.fainted, pokemon.species)
-                            if not pokemon.active:
-                                self.orderedPartyPokemon.append(pokemon)
+                            if not pokemonObj.active:
+                                self.orderedPartyPokemon.append(pokemonObj)
 
             elif split_message[1] == "win" or split_message[1] == "tie":
                 if split_message[1] == "win":
@@ -187,7 +204,6 @@ class Engine:
                 if (activePokemon is not None):
                     prevActivePokemo = next((pokemon for pokemon in battle.team.values() if pokemon not in self.orderedPartyPokemon))
                     self.orderedPartyPokemon[i] = prevActivePokemo
-                    
         self.battle = battle
         
     def _create_battle(self, split_message: List[str]) -> Battle:

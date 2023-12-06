@@ -320,7 +320,6 @@ class PokemonBattleEnv(gymnasium.Env):
 
     def _determineReward(self):
         # TODO: intermittent rewards? need to keep track of previous state to compare to
-
         if not self.engine.battle._finished: 
             return -1
        

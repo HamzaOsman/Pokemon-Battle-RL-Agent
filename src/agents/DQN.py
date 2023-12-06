@@ -9,6 +9,12 @@ import torch.optim as optim
 import torch.nn.functional as F
 from pokemon_battle_env import PokemonBattleEnv
 import numpy as np
+from helpers import evaluate, featurize
+from matplotlib import pyplot as plt
+import configparser
+
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 # if GPU is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -109,18 +115,25 @@ async def trainModel(env: PokemonBattleEnv, max_episode=1, previousModel=None):
     memory = ReplayMemory(10000)
     steps_done = 0
     
+    evaluate_every = int(config.get("Agent Configuration", "evaluate_every"))
+    evaluation_runs = int(config.get("Agent Configuration", "evaluation_runs"))
+    eval_returns = []
+    eval_winrates = []
     wins = 0
     losses = 0
     ties = 0
-    for i_episode in range(max_episode):
+    
+    for i in range(max_episode):
         state, info = await env.reset()
+        state = featurize(env, state)
         state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-
+        
         terminated = truncated = False
         while not terminated and not truncated:
             action = select_action(env, state, policy_net, EPS_START, EPS_END, EPS_DECAY, steps_done)
             steps_done+=1
             observation, reward, terminated, truncated, info = await env.step(action.item())
+            observation = featurize(env, observation)
             reward = torch.tensor([reward], device=device)
             next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
 
@@ -139,18 +152,47 @@ async def trainModel(env: PokemonBattleEnv, max_episode=1, previousModel=None):
             for key in policy_net_state_dict:
                 target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
             target_net.load_state_dict(target_net_state_dict)
-
+        
+        if i % evaluate_every == 0:
+            eval_return, win_rate = await evaluate(env, policy_net, greedyPolicy)
+            eval_returns.append(eval_return)
+            eval_winrates.append(win_rate)
         wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+info["result"][2]
     
     await env.close()
+    
+    print(f"DQNAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
 
+    plt.figure()
+    plt.title('DQN Returns')
+    plt.xlabel("Evaluation Steps")
+    plt.ylabel("Evaluation Results")
+    plt.plot(np.arange(1, evaluation_runs+1), eval_returns)
+    plt.savefig('DQN_plot_returns.png')
+
+    plt.figure()
+    plt.title('DQN Winrate')
+    plt.xlabel("Evaluation Steps")
+    plt.ylabel("Win Rate %")
+    plt.plot(np.arange(evaluation_runs), eval_winrates)
+    plt.savefig('DQN_plot_winrate.png')
+    
     #Dont update bad model
     if(previousModel and (wins+ties)/max_episode < 0.4): 
         return
     
-    print(f"DQNAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
     policy_net = policy_net.to('cpu')
     torch.save(policy_net.state_dict(), './models/DQN_model.pth')
+
+def greedyPolicy(state, model, valid_action_mask):
+    with torch.no_grad():
+        state = torch.tensor(state, dtype=torch.float32, device=device)
+        action_values = model(state).squeeze()
+        valid_actions = np.where(valid_action_mask)[0]
+        valid_actions = torch.tensor(valid_actions, device=device)
+        a = valid_actions[torch.argmax(action_values[valid_actions])]
+        return a.view(1, 1).item()
+
 
 def select_action(env, state, policy_net, EPS_START=0, EPS_END=0, EPS_DECAY=1, steps_done=1):
     sample = random.random()

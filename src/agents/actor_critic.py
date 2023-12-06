@@ -3,6 +3,12 @@ from pokemon_battle_env import PokemonBattleEnv
 import numpy as np
 import warnings
 import matplotlib.pyplot as plt
+from player_config import PlayerConfig
+import configparser
+from helpers import featurize, evaluate
+
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 def softmaxProb(x: np.ndarray, Theta: np.ndarray):
     '''
@@ -62,10 +68,6 @@ def getFilteredProbabilities(x, Theta, action_mask):
 
     return valid_action_probs
 
-def featurize(env: PokemonBattleEnv, x):
-    x_normalized = (x - env.observation_space.low) / (env.observation_space.high - env.observation_space.low) # min-max normalization
-    return x_normalized
-
 async def learnActorCritic(
         env: PokemonBattleEnv,
         max_episodes=1,
@@ -99,6 +101,10 @@ async def learnActorCritic(
         w =  np.random.random(env.observation_space.shape[0])
 
     # for each battle
+    evaluate_every = int(config.get("Agent Configuration", "evaluate_every"))
+    evaluation_runs = int(config.get("Agent Configuration", "evaluation_runs"))
+    eval_returns = []
+    eval_winrates = []
     returns = np.zeros((max_episodes))
     for i in range(max_episodes):
         s, info = await env.reset()
@@ -130,11 +136,18 @@ async def learnActorCritic(
 
             s = sPrime
             actor_discount *= gamma
+        if i % evaluate_every == 0:
+            eval_return, win_rate = await evaluate(env, Theta, softmaxPolicy)
+            eval_returns.append(eval_return)
+            eval_winrates.append(win_rate)
         wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+info["result"][2]
         returns[i] = rewardSum
         rewardSum = 0
 
+    await env.close()
+
     print(f"learnActorCritic record:\ngames played: {(wins+losses)}, wins: {wins}, losses: {losses}, win percentage: {wins/(wins+losses+ties)}")
+    print("Evaluated Returns: ", eval_returns)
     # print("how many times was each action taken by the agent?", actionCounts)
     # print("sum of returns", np.sum(returns))
 
@@ -145,12 +158,19 @@ async def learnActorCritic(
         np.save(thetaFileStr, Theta)
         np.save(wFileStr, w)
 
-    # plt.scatter(range(len(returns)), returns)
-    # plt.xlabel("battle")
-    # plt.ylabel("return")
-    # plt.show()
+    plt.figure()
+    plt.xlabel("Evaluation Steps")
+    plt.ylabel("Evaluation Results")
+    plt.plot(np.arange(1, evaluation_runs+1), eval_returns)
+    plt.savefig('AC_plot_returns.png')
 
-    await env.close()
+    plt.figure()
+    plt.xlabel("Evaluation Steps")
+    plt.ylabel("Win Rate %")
+    plt.plot(np.arange(evaluation_runs), eval_winrates)
+    plt.savefig('AC_plot_winrate.png')
+    
+    
     return Theta, w
 
 async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = "./models/AC_model_Theta.npy", wModel = "./models/AC_model_w.npy"):
@@ -199,5 +219,6 @@ async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = ".
     # plt.xlabel("battle")
     # plt.ylabel("return")
     # plt.show()
+    
 
     await env.close()

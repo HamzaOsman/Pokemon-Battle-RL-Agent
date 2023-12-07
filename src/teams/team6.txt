@@ -1,0 +1,58 @@
+Pikachu @ Light Ball  
+Ability: Static  
+EVs: 4 Atk / 252 SpA / 252 Spe  
+Hasty Nature  
+- Charm  
+- Quick Attack  
+- Thunderbolt  
+- Thunder  
+
+Milotic @ Leftovers  
+Ability: Marvel Scale  
+EVs: 252 SpA / 4 SpD / 252 Spe  
+Timid Nature  
+IVs: 0 Atk  
+- Hydro Pump  
+- Surf  
+- Waterfall  
+- Rain Dance  
+
+Alakazam @ Leftovers  
+Ability: Synchronize  
+EVs: 252 SpA / 4 SpD / 252 Spe  
+Timid Nature  
+IVs: 0 Atk  
+- Calm Mind  
+- Future Sight  
+- Psychic  
+- Psybeam  
+
+Entei @ Leftovers  
+Ability: Pressure  
+EVs: 252 SpA / 4 SpD / 252 Spe  
+Timid Nature  
+IVs: 0 Atk  
+- Fire Blast  
+- Flamethrower  
+- Ember  
+- Fire Spin  
+
+Sceptile @ Leftovers  
+Ability: Overgrow  
+EVs: 252 SpA / 4 SpD / 252 Spe  
+Timid Nature  
+IVs: 2 Atk / 30 SpA  
+- Giga Drain  
+- Leaf Blade  
+- Bullet Seed  
+- Hidden Power [Grass]  
+
+Absol @ Leftovers  
+Ability: Pressure  
+EVs: 252 SpA / 4 SpD / 252 Spe  
+Timid Nature  
+IVs: 3 Atk  
+- Bite  
+- Feint Attack  
+- Hidden Power [Dark]  
+- Thief  

@@ -5,6 +5,7 @@ from poke_env.player import BattleOrder, DefaultBattleOrder
 from engine import Engine
 from poke_env.environment.move import Move
 from poke_env.environment.side_condition import SideCondition
+from poke_env.environment.status import Status
 from poke_env.data import GenData
 import numpy as np
 import webbrowser
@@ -66,14 +67,14 @@ class PokemonBattleEnv(gymnasium.Env):
             1, # type1
             0, # type2
             0, # status
-            1, # hp
+            0, # hp percent
             1, # atk
             1, # def
             1, # spa
             1, # spd
             1  # spe
         ] + 4*move_min
-        friendlyPokemon_max = [117, 76, 18, 18, 7, 255, 255, 255, 255, 255, 255] + 4*move_max
+        friendlyPokemon_max = [117, 76, 18, 18, 7, 100, 999, 999, 999, 999, 999] + 4*move_max
         
         activeFriendlyPokemon_min = boosts_min + friendlyPokemon_min
         activeFriendlyPokemon_max = boosts_max + friendlyPokemon_max
@@ -116,7 +117,23 @@ class PokemonBattleEnv(gymnasium.Env):
         features_max = np.array(activeFriendlyPokemon_max+(self.TEAM_SIZE-1)*friendlyPokemon_max+activeEnemyPokemon_max+(self.ENEMY_TEAM_SIZE-1)*enemyPokemon_max+game_max)
 
         self.observation_space = gymnasium.spaces.Box(low=features_min, high=features_max, dtype=np.int16)
+
+        # only 1 desired goal (enemy pkmn status = fainted) atm
+        self.goal_space = gymnasium.spaces.Box(low=np.array([Status.FNT.value]*self.ENEMY_TEAM_SIZE), high=np.array([Status.FNT.value]*self.ENEMY_TEAM_SIZE), dtype=np.int16)
         
+        self.goal_featurizer = lambda g : (g-NONE_STATUS) / (7-NONE_STATUS)
+
+        def _goal_mapping(state):
+            enemy_status_indices = []
+            offset = len(activeFriendlyPokemon_min+(self.TEAM_SIZE-1)*friendlyPokemon_min+boosts_min)+5
+            enemy_status_indices.append(offset)
+            for i in range(self.ENEMY_TEAM_SIZE-1):
+                offset += len(enemyPokemon_min)
+                enemy_status_indices.append(offset)
+            return state[:, enemy_status_indices]
+
+        self.goal_mapping = _goal_mapping
+
         # +1 representing defaultAction (struggle) when no other actions are valid
         self.action_space = Discrete(4+(self.TEAM_SIZE-1)+1)
         # self.reward_range = (-50-self.TEAM_SIZE-self.ENEMY_TEAM_SIZE, 50+self.TEAM_SIZE+self.ENEMY_TEAM_SIZE)
@@ -183,6 +200,15 @@ class PokemonBattleEnv(gymnasium.Env):
         if (len(self.engine.battle.available_switches) > 0):
             action_mask[5:] = [1 if p in self.engine.battle.available_switches else 0 for p in self.engine.orderedPartyPokemon]
 
+        if (not np.any(action_mask)):
+            print("\n\n\n\n\nno actions!\n\n\n\n\n")
+            print("battle:", self.engine.battle.battle_tag)
+            print("turn:", self.engine.battle.turn)
+            print("force_switch?:", self.engine.battle.force_switch)
+            print("available_moves:", self.engine.battle.available_moves)
+            print("active_pokemon.moves", self.engine.battle.active_pokemon.moves.values())
+            print("available_switches", self.engine.battle.available_switches)
+            action_mask[0] = 1 
         # ex: [0, 1,0,1,1, 0,1] => can make moves #1, #3, #4, or switch #2
         # ex: [1, 0,0,0,0, 1,0] => can make defaultMove or switch #1
         
@@ -238,7 +264,7 @@ class PokemonBattleEnv(gymnasium.Env):
                 pokemon.types[0].value, 
                 pokemon.types[1].value if (pokemon.types[1] is not None) else NONE_TYPE,
                 pokemon.status.value if (pokemon.status is not None) else NONE_STATUS,
-                pokemon.current_hp,
+                round(100*pokemon.current_hp/pokemon.max_hp),
                 pokemon.stats["atk"],
                 pokemon.stats["def"],
                 pokemon.stats["spa"], 
@@ -320,7 +346,6 @@ class PokemonBattleEnv(gymnasium.Env):
 
     def _determineReward(self):
         # TODO: intermittent rewards? need to keep track of previous state to compare to
-
         if not self.engine.battle._finished: 
             return -1
        

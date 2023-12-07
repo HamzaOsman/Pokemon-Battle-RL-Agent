@@ -4,7 +4,7 @@ from typing import List
 
 import websockets
 
-from agents import DQN, actor_critic as AC, qlearning as QL
+from agents import DQN, actor_critic as AC, qlearning as QL, DQNHER
 
 from player_config import PlayerConfig
 from engine import Engine
@@ -77,18 +77,13 @@ async def runRandomAgent(env: PokemonBattleEnv, max_episode=1):
     print(f"runRandomAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
 
 
-def featurize(env: PokemonBattleEnv, x):
-    x_normalized = (x - env.observation_space.low) / (env.observation_space.high - env.observation_space.low) # min-max normalization
-    return x_normalized
-
-
 # Human playing against agent(s)
 async def playVsAgent(algos: List[str], opponentUsername: str):
     agentTeamSize = int(config.get("Battle Configuration", "agent_team_size"))
     opponentTeamSize = int(config.get("Battle Configuration", "opponent_team_size"))
     battleFormat = config.get("Battle Configuration", "battle_format")
     agentTasks = []
-    # AC, DQN, QL
+    # AC, DQN, QL, DQNHER
     for algo in algos:
         agentUsername = algo + "-agent"
         
@@ -104,7 +99,11 @@ async def playVsAgent(algos: List[str], opponentUsername: str):
         elif algo == "AC":
             agentTasks.append(AC.runActorCritic(agentEnv, 1))
         elif algo == "QL":
-            agentTasks.append(QL.runGreedyQLAgent(agentEnv, "./models/QL_model.npy", 1))
+            agentTasks.append(QL.runGreedyQLAgent(agentEnv, gen=1, max_episode=1))
+        elif algo == "DQNHER":
+            agentTasks.append(DQNHER.runGreedyDQNAgent(agentEnv, "./models/DQNHER_model.pth", 1))
+        # elif algo == "SAC":
+        #     agentTasks.append(SAC.runGreedySACAgent(agentEnv, "./models/SAC_model.npy", 1))
         else:
             raise Exception("Trying to play against an unknown agent algorithm!")
         
@@ -112,8 +111,10 @@ async def playVsAgent(algos: List[str], opponentUsername: str):
     
 # Agents learning generationally
 async def trainAgents(algos, numGenerations = 2, numBattles = 100):
-    for g in range(numGenerations):
-        print("\nGeneration: ", g+1)
+    evaluate_every = int(config.get("Agent Configuration", "evaluate_every"))
+    evaluation_runs = int(config.get("Agent Configuration", "evaluation_runs"))
+    for gen in range(1, numGenerations+1):
+        print("\nGeneration:", gen)
         websocketUrl = "ws://localhost:8000/showdown/websocket"
 
         if("DQN" in algos):
@@ -122,38 +123,48 @@ async def trainAgents(algos, numGenerations = 2, numBattles = 100):
             acAgentEnv, acOpponentEnv = await buildEnv("AC", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
         if("QL" in algos):
             qlAgentEnv, qlOpponentEnv = await buildEnv("QL", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
+        if("DQNHER" in algos):
+            dqnherAgentEnv, dqnherOpponentEnv = await buildEnv("DQNHER", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
         print("connection went fine, probably")
         
         tasks = []
         
         # TODO: Every time we start 
-        if g == 0:
+        if gen == 1:
             if("DQN" in algos):
                 tasks.append(DQN.trainModel(dqnAgentEnv, numBattles))
-                tasks.append(runRandomAgent(dqnOpponentEnv, numBattles))
+                tasks.append(runRandomAgent(dqnOpponentEnv, numBattles+((numBattles//evaluate_every)*evaluation_runs)))
 
             if("AC" in algos):
                 tasks.append(AC.learnActorCritic(acAgentEnv, numBattles, learnFromPrevModel=False))
-                tasks.append(runRandomAgent(acOpponentEnv, numBattles))
+                tasks.append(runRandomAgent(acOpponentEnv, numBattles+((numBattles//evaluate_every)*evaluation_runs)))
 
             if("QL" in algos):
-                tasks.append(QL.runQLAgent(qlAgentEnv, numBattles))
-                tasks.append(runRandomAgent(qlOpponentEnv, numBattles))
+                tasks.append(QL.runQLAgent(qlAgentEnv, gen, numBattles))
+                tasks.append(runRandomAgent(qlOpponentEnv, numBattles+((numBattles//evaluate_every)*evaluation_runs)))
+
+            if("DQNHER" in algos):
+                tasks.append(DQNHER.trainModel(dqnherAgentEnv, numBattles))
+                tasks.append(runRandomAgent(dqnherOpponentEnv, numBattles+((numBattles//evaluate_every)*evaluation_runs)))
 
         else:
             if("DQN" in algos):
                 tasks.append(DQN.trainModel(dqnAgentEnv, numBattles, './models/DQN_model.pth'))
-                tasks.append(DQN.runGreedyDQNAgent(dqnOpponentEnv, './models/DQN_model.pth', numBattles))
+                tasks.append(DQN.runGreedyDQNAgent(dqnOpponentEnv, './models/DQN_model.pth', numBattles+((numBattles//evaluate_every)*evaluation_runs)))
 
             if("AC" in algos):
-                tasks.append(AC.learnActorCritic(acAgentEnv, numBattles, learnFromPrevModel=True))
-                tasks.append(AC.runActorCritic(acOpponentEnv, numBattles))
+                tasks.append(AC.learnActorCritic(acAgentEnv, numBattles, learnFromPrevModel=False))
+                tasks.append(AC.runActorCritic(acOpponentEnv, numBattles+((numBattles//evaluate_every)*evaluation_runs)))
 
             if("QL" in algos):
-                # TODO: QL should have a way to start learning from a saved model
-                tasks.append(QL.runQLAgent(qlAgentEnv, numBattles))
-                tasks.append(QL.runGreedyQLAgent(qlOpponentEnv, "./models/QL_model.npy", numBattles))
+                tasks.append(QL.runQLAgent(qlAgentEnv, gen, numBattles, learnFromPrevModel=True))
+                tasks.append(QL.runGreedyQLAgent(qlOpponentEnv, gen-1, numBattles+((numBattles//evaluate_every)*evaluation_runs)))
+
+            if("DQNHER" in algos):
+                tasks.append(DQNHER.trainModel(dqnherAgentEnv, numBattles, './models/DQNHER_model.pth'))
+                tasks.append(DQNHER.runGreedyDQNHERAgent(dqnherOpponentEnv, './models/DQNHER_model.pth', numBattles+((numBattles//evaluate_every)*evaluation_runs)))
         await asyncio.gather(*tasks)
+
 
 if __name__ == "__main__":
     start_time = time.time()

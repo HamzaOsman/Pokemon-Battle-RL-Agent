@@ -4,6 +4,7 @@ from helpers import featurize, evaluate
 from player_config import PlayerConfig
 import configparser
 from matplotlib import pyplot as plt
+import time
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -12,17 +13,25 @@ def greedyPolicy(x, W, action_mask):
     valid_actions = np.where(action_mask)[0]
     return valid_actions[np.argmax((W.T @ x)[valid_actions])]
 
-async def runQLAgent(env: PokemonBattleEnv, max_episode=1, gamma=0.99, step_size=0.001, epsilon=0.5):
+async def runQLAgent(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevModel=False, gamma=0.99, step_size=0.001, epsilon=0.5):
     wins = 0
     losses = 0
 
-    W = np.random.rand(env.observation_space.shape[0], env.action_space.n)
+    if(learnFromPrevModel and gen > 1):
+        try:
+            W = np.load(f'./models/QL_model_gen{gen-1}.npy')
+        except:
+            print(f"model file ./models/QL_model_gen{gen-1}.npy not found!")
+            exit()
+    else:
+        W = np.random.rand(env.observation_space.shape[0], env.action_space.n)
 
     evaluate_every = int(config.get("Agent Configuration", "evaluate_every"))
     evaluation_runs = int(config.get("Agent Configuration", "evaluation_runs"))
     eval_returns = []
     eval_winrates = []
     
+    start_time = time.time()
     for i in range(max_episode):
         s, info = await env.reset()
         s = featurize(env, s)
@@ -33,38 +42,41 @@ async def runQLAgent(env: PokemonBattleEnv, max_episode=1, gamma=0.99, step_size
             s_next = featurize(env, s_next)
             W[:, a] = W[:, a] + step_size * (r+gamma*(1-terminated)*np.amax(W.T @ s_next) - (W.T@s)[a]) * s
             s = s_next
-        if i % evaluate_every == 0:
-            eval_return, win_rate = await evaluate(env, W, greedyPolicy)
+        if (i+1) % evaluate_every == 0:
+            progress_msg = "QL evaluation ("+str(len(eval_returns)+1)+"/"+str(max_episode//evaluate_every)+")"
+            eval_return, win_rate = await evaluate(env, W, greedyPolicy, progress_msg, evaluation_runs)
             eval_returns.append(eval_return)
             eval_winrates.append(win_rate)
         wins, losses = wins+info["result"][0], losses+info["result"][1]
 
     await env.close()
 
+    print(f"QL elapsed time:", time.time()-start_time, "s")
+
     print(f"runQLAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
     print("Evaluated Returns: ", eval_returns)
-    np.save('./models/QL_model.npy', W)
+    np.save(f'./models/QL_model_gen{gen}.npy', W)
     
     plt.figure()
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Evaluation Results")
-    plt.plot(np.arange(1, evaluation_runs+1), eval_returns)
-    plt.savefig('QL_plot_returns.png')
+    plt.plot(np.arange(1, len(eval_returns)+1), eval_returns)
+    plt.savefig(f'QL_returns_gen{gen}.png')
 
     plt.figure()
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
-    plt.plot(np.arange(1, evaluation_runs+1), eval_winrates)
-    plt.savefig('QL_plot_winrate.png')
+    plt.plot(np.arange(1, len(eval_winrates)+1), eval_winrates)
+    plt.savefig(f'QL_winrate_gen{gen}.png')
 
-async def runGreedyQLAgent(env: PokemonBattleEnv, model_file, max_episode=1):
+async def runGreedyQLAgent(env: PokemonBattleEnv, gen=1, max_episode=1):
     wins = 0
     losses = 0
 
     try:
-        W = np.load(model_file)
+        W = np.load(f'./models/QL_model_gen{gen}.npy')
     except:
-        print(f"model file \'{model_file}\' not found!")
+        print(f"model file ./models/QL_model_gen{gen}.npy not found!")
         exit()
 
     for i in range(max_episode):

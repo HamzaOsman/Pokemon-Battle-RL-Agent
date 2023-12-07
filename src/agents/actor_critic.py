@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from player_config import PlayerConfig
 import configparser
 from helpers import featurize, evaluate
+import time
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -106,6 +107,7 @@ async def learnActorCritic(
     eval_returns = []
     eval_winrates = []
     returns = np.zeros((max_episodes))
+    start_time = time.time()
     for i in range(max_episodes):
         s, info = await env.reset()
         s = featurize(env, s)
@@ -136,8 +138,9 @@ async def learnActorCritic(
 
             s = sPrime
             actor_discount *= gamma
-        if i % evaluate_every == 0:
-            eval_return, win_rate = await evaluate(env, Theta, softmaxPolicy)
+        if (i+1) % evaluate_every == 0:
+            progress_msg = "AC evaluation ("+str(len(eval_returns)+1)+"/"+str(max_episodes//evaluate_every)+")"
+            eval_return, win_rate = await evaluate(env, Theta, softmaxPolicy, progress_msg, evaluation_runs)
             eval_returns.append(eval_return)
             eval_winrates.append(win_rate)
         wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+info["result"][2]
@@ -145,6 +148,8 @@ async def learnActorCritic(
         rewardSum = 0
 
     await env.close()
+
+    print(f"ActorCritic elapsed time:", time.time()-start_time, "s")
 
     print(f"learnActorCritic record:\ngames played: {(wins+losses)}, wins: {wins}, losses: {losses}, win percentage: {wins/(wins+losses+ties)}")
     print("Evaluated Returns: ", eval_returns)
@@ -161,13 +166,14 @@ async def learnActorCritic(
     plt.figure()
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Evaluation Results")
-    plt.plot(np.arange(1, evaluation_runs+1), eval_returns)
+    plt.plot(np.arange(1, len(eval_returns)+1), eval_returns)
+
     plt.savefig('AC_plot_returns.png')
 
     plt.figure()
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
-    plt.plot(np.arange(evaluation_runs), eval_winrates)
+    plt.plot(np.arange(1, len(eval_winrates)+1), eval_winrates)
     plt.savefig('AC_plot_winrate.png')
     
     

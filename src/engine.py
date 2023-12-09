@@ -166,7 +166,8 @@ class Engine:
                     battle._parse_request(request)
                     
                     side = request["side"]
-                    self.orderedPartyPokemon = []
+                    if updateCurrent:
+                        self.orderedPartyPokemon = []
                     # comes from pokemon showdown, true order
                     for pokemon in side["pokemon"]:
                         if pokemon:
@@ -178,7 +179,7 @@ class Engine:
                                 for move in pokemon["moves"]:
                                     pokemonObj._add_move(move)
                             
-                            if not pokemonObj.active:
+                            if updateCurrent and not pokemonObj.active:
                                 self.orderedPartyPokemon.append(pokemonObj)
 
             elif split_message[1] == "win" or split_message[1] == "tie":

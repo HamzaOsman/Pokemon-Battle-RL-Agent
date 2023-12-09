@@ -395,9 +395,14 @@ class PokemonBattleEnv(gymnasium.Env):
             reward -= 0.1 * (newBoost - oldOpponentPkmn.boosts.get(stat))
 
         # you defeat one of their pokemon
+        numDefeated = 0
         for name, pokemon in newBattleState.opponent_team.items():
-            if pokemon.fainted and not oldBattleState.opponent_team[name].fainted:
-                reward += 3
+            if pokemon.fainted:
+                numDefeated += 1
+        for name, pokemon in oldBattleState.opponent_team.items():
+            if pokemon.fainted:
+                numDefeated -= 1
+        reward += 3*numDefeated
 
         # one of your pokemon is defeated
         for name, pokemon in newBattleState.team.items():

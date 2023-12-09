@@ -110,9 +110,10 @@ class PokemonBattleEnv(gymnasium.Env):
         sideConditions_max = [4, 4, 4, 4, 3]
 
         game_min = [
-            NONE_WEATHER # Weather
+            NONE_WEATHER, # Weather
+            1 # Turn number
         ] + 2*sideConditions_min
-        game_max = [9] + 2*sideConditions_max
+        game_max = [9, 1000] + 2*sideConditions_max
                          
         features_min = np.array(activeFriendlyPokemon_min+(self.TEAM_SIZE-1)*friendlyPokemon_min+activeEnemyPokemon_min+(self.ENEMY_TEAM_SIZE-1)*enemyPokemon_min+game_min)
         features_max = np.array(activeFriendlyPokemon_max+(self.TEAM_SIZE-1)*friendlyPokemon_max+activeEnemyPokemon_max+(self.ENEMY_TEAM_SIZE-1)*enemyPokemon_max+game_max)
@@ -328,6 +329,7 @@ class PokemonBattleEnv(gymnasium.Env):
         # observation of game
         game = [
             NONE_WEATHER if not battleState.weather else list(battleState.weather.keys())[0].value,
+            battleState.turn,
             *playerSide,
             *opponentSide
         ]

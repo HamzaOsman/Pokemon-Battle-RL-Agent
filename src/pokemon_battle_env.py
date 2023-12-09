@@ -336,21 +336,6 @@ class PokemonBattleEnv(gymnasium.Env):
 
         obs = np.array(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game)
         return obs
-
-    def _measureTypeAdvantage(self, battle: Battle):
-        reward = 0
-        agentPkmn = battle.active_pokemon
-        opponentPkmn = battle.opponent_active_pokemon
-
-        reward += opponentPkmn.damage_multiplier(agentPkmn.type_1)
-        if agentPkmn.type_2 != None:
-            reward += opponentPkmn.damage_multiplier(agentPkmn._type_2)
-
-        for move in agentPkmn.moves.values():
-            if move.id != "curse":
-                reward += 0.5 * opponentPkmn.damage_multiplier(move)
-
-        return reward
         
     def _measureNewState(self):
         newBattleState = self.engine.battle
@@ -365,35 +350,11 @@ class PokemonBattleEnv(gymnasium.Env):
         # + if your hp goes up, - if your hp goes down
         # don't want to punish or reward swapping through this metric though
         if newAgentPkmn.species == oldAgentPkmn.species:
-            reward += (newAgentPkmn.current_hp_fraction 
-                   - oldAgentPkmn.current_hp_fraction) * 2
+            reward += (newAgentPkmn.current_hp_fraction - oldAgentPkmn.current_hp_fraction) 
         # + if their hp goes down, - if their hp goes up
         if newOpponentPkmn.species == oldOpponentPkmn.species:
-            reward += (oldOpponentPkmn.current_hp_fraction
-                   - newOpponentPkmn.current_hp_fraction) * 2
+            reward += (oldOpponentPkmn.current_hp_fraction- newOpponentPkmn.current_hp_fraction)
         
-        # you lose a status effect
-        if newAgentPkmn.species == oldAgentPkmn.species and newAgentPkmn.status == None and oldAgentPkmn.status != None:
-            reward += 0.5
-        # they gain a status effect
-        if newOpponentPkmn.species == oldOpponentPkmn.species and oldOpponentPkmn.status == None and newOpponentPkmn.status != None:
-            reward += 0.5
-
-        # do NOT measure type advantage when their pokemon changes
-        # this is because type advantage should reflect how good your action was
-        # if you defeat an enemy and they swap in a well typed pokemon you should not be punished
-        # but you should be rewarded for swapping in a good pokemon, or if you keep a good pokemon
-        if oldOpponentPkmn.species == newOpponentPkmn.species:
-            reward += 0.1 * self._measureTypeAdvantage(newBattleState)
-
-        # stat boosts, this can punish or reward swapping
-        # reward our stats going up
-        for stat, newBoost in newAgentPkmn.boosts.items():
-            reward += 0.1 * (newBoost - oldAgentPkmn.boosts.get(stat))
-        # punish their stats going up
-        for stat, newBoost in newOpponentPkmn.boosts.items():
-            reward -= 0.1 * (newBoost - oldOpponentPkmn.boosts.get(stat))
-
         # you defeat one of their pokemon
         numDefeated = 0
         for name, pokemon in newBattleState.opponent_team.items():
@@ -402,37 +363,25 @@ class PokemonBattleEnv(gymnasium.Env):
         for name, pokemon in oldBattleState.opponent_team.items():
             if pokemon.fainted:
                 numDefeated -= 1
-        reward += 3*numDefeated
+        reward += numDefeated
 
         # one of your pokemon is defeated
+        numDefeated = 0
         for name, pokemon in newBattleState.team.items():
             if pokemon.fainted and not oldBattleState.team[name].fainted:
-                reward -= 3
+                numDefeated += 1
+        reward -= numDefeated
 
         return reward
 
     def _determineReward(self):     
         if not self.engine.battle._finished:
-            return self._measureNewState()
+            return -0.5 + self._measureNewState()
 
         # final reward dependent on performance
         reward = 0
-        for name, friendly in self.engine.battle.team.items():
-            # punished for fainted friendly
-            if friendly.fainted:
-                reward -= 1
-            # reward proportional to keeping friendly alive
-            else:
-                reward += 1
-        
-        numEnemiesRemaining = self.ENEMY_TEAM_SIZE 
-        for name, enemy in self.engine.battle.opponent_team.items():
-            # rewarded for fainted enemy
-            if enemy.fainted:
-                numEnemiesRemaining -= 1
-        
-        reward -= numEnemiesRemaining
-        turnRatio = self.engine.battle.turn / 1000
+       
+        turnRatio = self.engine.battle.turn / 100
 
         if self.engine.battle.won is None:
             # tie :hmm:
@@ -443,6 +392,8 @@ class PokemonBattleEnv(gymnasium.Env):
             reward += 1/turnRatio
         else:
             reward -= 10
+            # lose faster == bigger punishment
+            reward -= 1/turnRatio
 
         return reward
     

@@ -347,7 +347,8 @@ class PokemonBattleEnv(gymnasium.Env):
             reward += opponentPkmn.damage_multiplier(agentPkmn._type_2)
 
         for move in agentPkmn.moves.values():
-            reward += 0.5 * opponentPkmn.damage_multiplier(move)
+            if move.id != "curse":
+                reward += 0.5 * opponentPkmn.damage_multiplier(move)
 
         return reward
         

@@ -31,8 +31,6 @@ class Engine:
         
     async def _waitUntilChallenge(self):
         async for message in self.socket:
-            # print(self.agent.username, "getting msg...", message)
-            # pipe-separated sequences
             messageSplit = message.split("|")
             if(messageSplit[1] == "pm" and messageSplit[4].startswith("/challenge")):
                 return
@@ -48,7 +46,6 @@ class Engine:
         await self._sendMessage(f"/trn {self.agent.username},0,")
 
     async def _setTeam(self):
-        # print("setting team:", "/utm %s" % player.team)
         await self._sendMessage("/utm %s" % self.agent.team)
 
     async def startBattle(self):
@@ -62,7 +59,6 @@ class Engine:
         await self._sendMessage(challengeMsg)
 
         await self.parseInitialBattle()
-        # print("battle started!")
 
     async def parseInitialBattle(self):
         isInit = False
@@ -70,13 +66,9 @@ class Engine:
             message = await self.socket.recv()
             messageSplit = message.split("|")
             isInit = messageSplit[1] == "init" or isInit
-            # if not isInit:
-            #     print("this is not init:")
-            #     print(message)
+
             # ignore non battle messages, and anything else in the socket before the initialization
             if(messageSplit[0].startswith(">battle") and isInit):
-                # if(messageSplit[1].startswith("error")):
-                #     print(self.agent.username, message)
                 self._handle_battle_message(message)
 
                 # p2, the accepter, gets displayed last
@@ -90,22 +82,16 @@ class Engine:
         while i < 2:
             message = await self.socket.recv()
             messageSplit = message.split("|")
-            # print(self.agent.username, messageSplit)
-            # print()
             # ignore non battle messages, and info about spectators looking at battles
             if(messageSplit[0].startswith(">battle") and messageSplit[1] not in {"j", "l"}):
                 i += 1
-                # if(messageSplit[1].startswith("error")):
-                #     print(self.battle.active_pokemon, ") invalid move made!", self.agent.username, message)
                 try:
                     self._handle_battle_message(message)
                 except:
-                    # print("errored and movemade:", moveMade)
                     break
 
                 if(self.battle._finished):
                     break
-        # print("active pokemon for", self.agent.username, self.battle.active_pokemon)
 
 
     async def doAction(self, action: BattleOrder) -> Battle:
@@ -128,7 +114,6 @@ class Engine:
         while (self.battle._wait and not self.battle.finished):
             await self._parseBattle()
 
-        # print()
         return self.battle
     
     # THE FOLLOWING FUNCTIONS ARE HEAVILY BASED ON POKE ENV CODE, citation provided
@@ -178,7 +163,6 @@ class Engine:
                                 for move in pokemon["moves"]:
                                     pokemonObj._add_move(move)
                             
-                            # print("active?", pokemon.active, "fainted?", pokemon.fainted, pokemon.species)
                             if not pokemonObj.active:
                                 self.orderedPartyPokemon.append(pokemonObj)
 

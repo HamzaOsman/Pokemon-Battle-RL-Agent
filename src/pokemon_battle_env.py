@@ -141,11 +141,10 @@ class PokemonBattleEnv(gymnasium.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self._rendered = False
+        
 
     async def reset(self, seed=None):
         super().reset(seed=seed)
-        # if self.engine.socket is not None:
-        #     await self.engine.socket.close()
 
         self._rendered = False
 
@@ -242,15 +241,6 @@ class PokemonBattleEnv(gymnasium.Env):
 
     def _buildObservation(self):
         battleState = self.engine.battle
-        # if self.engine.agent.isChallenger:
-            
-        #     print("the pokemon order is:")
-        #     for pokemon in [battleState.active_pokemon] + self.engine.orderedPartyPokemon:
-        #         print(pokemon)
-        #         print("their moves are:")
-        #         print(pokemon.moves)
-            
-        #     print("\n\n")
 
         # friendly pokemon
         activeFriendlyPokemon = []
@@ -347,7 +337,7 @@ class PokemonBattleEnv(gymnasium.Env):
     def _determineReward(self):
         # TODO: intermittent rewards? need to keep track of previous state to compare to
         if not self.engine.battle._finished: 
-            return -1
+            return 0
        
         reward = 0
         
@@ -357,23 +347,25 @@ class PokemonBattleEnv(gymnasium.Env):
                 reward -= 1
             # reward proportional to keeping friendly alive
             else:
-                reward += 1 * (friendly.current_hp/friendly.max_hp)
+                reward += 1 * (friendly.current_hp_fraction)
+                
         for name, enemy in self.engine.battle.opponent_team.items():
             # rewarded for fainted enemy
             if enemy.fainted:
                 reward += 1
             # punishment proportional to how close to taking down each enemy
             else:
-                reward -= 1 * (enemy.current_hp/enemy.max_hp)
+                reward -= 1 * (enemy.current_hp_fraction)
+        
+        reward -= self.ENEMY_TEAM_SIZE-len(self.engine.battle.opponent_team.items()) #Unseen full HP enemy pokemons 
 
         if self.engine.battle.won is None:
-            reward -= 25
+            reward -= 5
         elif self.engine.battle.won:
-            reward += 100
+            reward += 20
         else:
-            reward -= 100
-        # on ties this would also do -100?
-        # reward += 100 if self.engine.battle.won else -100
+            reward -= 20
+
 
         return reward
     

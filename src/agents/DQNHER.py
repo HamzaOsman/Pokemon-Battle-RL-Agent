@@ -50,7 +50,7 @@ class DQNHER(nn.Module):
         x = F.relu(self.layer2(x))
         return self.layer3(x)
 
-async def trainModel(env: PokemonBattleEnv, max_episode=1, previousModel=None):  
+async def trainModel(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevModel=False):  
     def optimize_model():
         if len(memory) < BATCH_SIZE:
             return
@@ -86,8 +86,8 @@ async def trainModel(env: PokemonBattleEnv, max_episode=1, previousModel=None):
     n_state_observations = env.observation_space.shape[0]
     n_goal_observations = env.goal_space.shape[0]
 
-    if(previousModel):
-        policy_net = loadModel(env, previousModel)
+    if(learnFromPrevModel and gen > 1):
+        policy_net = loadModel(env, f'./models/DQNHER_model_gen{gen-1}.pth')
         target_net = DQNHER(n_state_observations+n_goal_observations, n_actions).to(device)
         target_net.load_state_dict(policy_net.state_dict())
     else:
@@ -176,30 +176,24 @@ async def trainModel(env: PokemonBattleEnv, max_episode=1, previousModel=None):
 
         wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+info["result"][2]
     
-    print(f"DQNHER elapsed time:", time.time()-start_time, "s")
-
-    print(f"DQNHERAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
-
     plt.figure()
     plt.title('DQNHER Returns')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Evaluation Results")
-    plt.plot(np.arange(1, len(eval_returns)+1), eval_returns)
-    plt.savefig('DQNHER_plot_returns.png')
+    plt.plot(eval_returns)
+    plt.savefig(f'./plots/DQNHER_plot_returns{gen}.png')
+    plt.close()
 
     plt.figure()
     plt.title('DQNHER Winrate')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
-    plt.plot(np.arange(1, len(eval_winrates)+1), eval_winrates)
-    plt.savefig('DQNHER_plot_winrate.png')
+    plt.plot(eval_winrates)
+    plt.savefig(f'./plots/DQNHER_plot_winrate{gen}.png')
+    plt.close()
 
-    #Dont update bad model
-    if(previousModel and (wins+ties)/max_episode < 0.4): 
-        return
-    
     policy_net = policy_net.to('cpu')
-    torch.save(policy_net.state_dict(), './models/DQNHER_model.pth')
+    torch.save(policy_net.state_dict(), f'./models/DQNHER_model_gen{gen}.pth')
 
     await env.close()
 
@@ -239,8 +233,12 @@ def select_action(env:PokemonBattleEnv, state, policy_net, EPS_START=0, EPS_END=
     else:
         return torch.tensor([[env.action_space.sample(env.valid_action_space_mask())]], device=device, dtype=torch.long)
 
-async def testModel(env: PokemonBattleEnv, model: DQNHER, max_episodes=1):
+async def runGreedyDQNHERAgent(env: PokemonBattleEnv, gen=1,  max_episodes=1):
     wins = losses = ties = 0
+    
+    model_file = f'./models/DQNHER_model_gen{gen}.pth'
+    model = loadModel(env, model_file)
+
     model.eval()    
     goal = env.goal_featurizer(env.goal_space.sample())
     goal = torch.tensor(goal, dtype=torch.float32, device=device).unsqueeze(0)
@@ -256,19 +254,8 @@ async def testModel(env: PokemonBattleEnv, model: DQNHER, max_episodes=1):
 
         wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+info["result"][2]
 
-    return wins, losses, ties
-
-async def runGreedyDQNHERAgent(env: PokemonBattleEnv, model_file, max_episode=1):
-    wins = 0
-    losses = 0
-    ties = 0
-
-    model = loadModel(env, model_file)
-    wins, losses, ties  = await testModel(env, model, max_episode)
     await env.close()
-
-    print(f"runGreedyDQNHERAgent({env.engine.agent.username}) record:\ngames played: {max_episode}, wins: {wins}, losses {losses}, ties: {ties}: win percentage: {wins/max_episode}")
-    
+    return wins, losses, ties
 
 def loadModel(env: PokemonBattleEnv, model_path: str):
     try:
@@ -277,5 +264,6 @@ def loadModel(env: PokemonBattleEnv, model_path: str):
         model.load_state_dict(model_state)
         return model
     except Exception as e:
+        print(e)
         print(f"Error loading DQNHER model")
         exit()

@@ -49,25 +49,25 @@ async def runQLAgent(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevM
             eval_winrates.append(win_rate)
         wins, losses = wins+info["result"][0], losses+info["result"][1]
 
-    await env.close()
-
-    print(f"QL elapsed time:", time.time()-start_time, "s")
-
-    print(f"runQLAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
-    print("Evaluated Returns: ", eval_returns)
     np.save(f'./models/QL_model_gen{gen}.npy', W)
     
     plt.figure()
+    plt.title('QL Returns')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Evaluation Results")
-    plt.plot(np.arange(1, len(eval_returns)+1), eval_returns)
-    plt.savefig(f'QL_returns_gen{gen}.png')
+    plt.plot(eval_returns)
+    plt.savefig(f'./plots/QL_returns_gen{gen}.png')
+    plt.close()
 
     plt.figure()
+    plt.title('QL Winrate')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
-    plt.plot(np.arange(1, len(eval_winrates)+1), eval_winrates)
-    plt.savefig(f'QL_winrate_gen{gen}.png')
+    plt.plot(eval_winrates)
+    plt.savefig(f'./plots/QL_winrate_gen{gen}.png')
+    plt.close()
+
+    await env.close()
 
 async def runGreedyQLAgent(env: PokemonBattleEnv, gen=1, max_episode=1):
     wins = 0
@@ -90,6 +90,5 @@ async def runGreedyQLAgent(env: PokemonBattleEnv, gen=1, max_episode=1):
 
     await env.close()
 
-    print(f"runGreedyAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
     
     

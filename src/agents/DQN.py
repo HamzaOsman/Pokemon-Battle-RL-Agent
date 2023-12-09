@@ -1,8 +1,6 @@
-import gymnasium as gym
 import math
 import random
 from collections import namedtuple, deque
-import time
 
 import torch
 import torch.nn as nn
@@ -50,7 +48,7 @@ class DQN(nn.Module):
         x = F.relu(self.layer2(x))
         return self.layer3(x)
 
-async def trainModel(env: PokemonBattleEnv, max_episode=1, previousModel=None):  
+async def trainModel(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevModel=False):  
     def optimize_model():
         if len(memory) < BATCH_SIZE:
             return
@@ -94,8 +92,8 @@ async def trainModel(env: PokemonBattleEnv, max_episode=1, previousModel=None):
     n_actions = env.action_space.n
     n_observations = env.observation_space.shape[0]
 
-    if(previousModel):
-        policy_net = loadModel(env, previousModel)
+    if(learnFromPrevModel and gen > 1):
+        policy_net = loadModel(env, f'./models/DQN_model_gen{gen-1}.pth')
         target_net = DQN(n_observations, n_actions).to(device)
         target_net.load_state_dict(policy_net.state_dict())
     else:
@@ -124,7 +122,6 @@ async def trainModel(env: PokemonBattleEnv, max_episode=1, previousModel=None):
     losses = 0
     ties = 0
     
-    start_time = time.time()
     for i in range(max_episode):
         state, info = await env.reset()
         state = featurize(env, state)
@@ -166,31 +163,27 @@ async def trainModel(env: PokemonBattleEnv, max_episode=1, previousModel=None):
             eval_winrates.append(win_rate)
         wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+info["result"][2]
     
-    print(f"DQN elapsed time:", time.time()-start_time, "s")
-    await env.close()
-    
-    print(f"DQNAgent record:\ngames played: {max_episode}, wins: {wins}, losses: {losses}, win percentage: {wins/max_episode}")
-
     plt.figure()
     plt.title('DQN Returns')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Evaluation Results")
-    plt.plot(np.arange(1, len(eval_returns)+1), eval_returns)
-    plt.savefig('DQN_plot_returns.png')
+    plt.plot(eval_returns)
+    plt.savefig(f'./plots/DQN_plot_returns_gen{gen}.png')
+    plt.close()
 
     plt.figure()
     plt.title('DQN Winrate')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
-    plt.plot(np.arange(1, len(eval_winrates)+1), eval_winrates)
-    plt.savefig('DQN_plot_winrate.png')
-    
-    #Dont update bad model
-    if(previousModel and (wins+ties)/max_episode < 0.4): 
-        return
+    plt.plot(eval_winrates)
+    plt.savefig(f'./plots/DQN_plot_winrate_gen{gen}.png')
+    plt.close()
+
     
     policy_net = policy_net.to('cpu')
-    torch.save(policy_net.state_dict(), './models/DQN_model.pth')
+    torch.save(policy_net.state_dict(), f'./models/DQN_model_gen{gen}.pth')
+    
+    await env.close()
 
 def greedyPolicy(state, model, valid_action_mask):
     with torch.no_grad():
@@ -216,8 +209,11 @@ def select_action(env, state, policy_net, EPS_START=0, EPS_END=0, EPS_DECAY=1, s
     else:
         return torch.tensor([[env.action_space.sample(env.valid_action_space_mask())]], device=device, dtype=torch.long)
 
-async def testModel(env: PokemonBattleEnv, model: DQN, max_episodes=1):
+async def runGreedyDQNAgent(env: PokemonBattleEnv, gen=1, max_episodes=1):
     wins = losses = ties = 0
+    model_file = f'./models/DQN_model_gen{gen}.pth'
+    model = loadModel(env, model_file)
+
     model.eval()    
     for i in range(max_episodes):
         state, info = await env.reset()
@@ -230,20 +226,10 @@ async def testModel(env: PokemonBattleEnv, model: DQN, max_episodes=1):
             state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
 
         wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+info["result"][2]
-
+    
+    await env.close()
     return wins, losses, ties
 
-async def runGreedyDQNAgent(env: PokemonBattleEnv, model_file, max_episode=1):
-    wins = 0
-    losses = 0
-    ties = 0
-
-    model = loadModel(env, model_file)
-    wins, losses, ties  = await testModel(env, model, max_episode)
-    await env.close()
-
-    print(f"runGreedyDQNAgent({env.engine.agent.username}) record:\ngames played: {max_episode}, wins: {wins}, losses {losses}, ties: {ties}: win percentage: {wins/max_episode}")
-    
 
 def loadModel(env: PokemonBattleEnv, model_path: str):
     try:

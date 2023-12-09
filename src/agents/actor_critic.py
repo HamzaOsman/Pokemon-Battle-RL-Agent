@@ -1,9 +1,6 @@
-import os
 from pokemon_battle_env import PokemonBattleEnv
 import numpy as np
-import warnings
 import matplotlib.pyplot as plt
-from player_config import PlayerConfig
 import configparser
 from helpers import featurize, evaluate
 import time
@@ -20,7 +17,6 @@ def softmaxProb(x: np.ndarray, Theta: np.ndarray):
     h = Theta.T @ x
     m = np.max(h)
     probs = np.exp(h-m)/np.sum(np.exp(h-m))
-
 
     return probs
 
@@ -64,31 +60,32 @@ def getFilteredProbabilities(x, Theta, action_mask):
     valid_action_probs[valid_actions] = softmaxProbs[valid_actions]
 
     if np.allclose(valid_action_probs, 0, atol=0):
-        # print("only 0s!")
         valid_action_probs[valid_actions] = 1/len(valid_actions)
 
     return valid_action_probs
 
 async def learnActorCritic(
         env: PokemonBattleEnv,
+        gen=1,
         max_episodes=1,
         gamma=0.99,
         actor_step_size=0.008,
-        critic_step_size=0.008,
-        thetaModel = "./models/AC_model_Theta.npy", 
-        wModel = "./models/AC_model_w.npy",
+        critic_step_size=0.008,                        
         learnFromPrevModel = False
         ):
-    # actionCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-
+    thetaModel = f"./models/AC_model_Theta_gen{gen-1}.npy"
+    wModel = f"./models/AC_model_w_gen{gen-1}.npy"
+    
     wins = 0
     losses = 0
     ties = 0
+    
     # initialize theta and w
     if learnFromPrevModel:
         try:
             Theta = np.load(thetaModel)
-        except:
+        except Exception as e:
+            print(e)
             print(f"model file \'{thetaModel}\' not found!")
             exit()
 
@@ -147,39 +144,33 @@ async def learnActorCritic(
         returns[i] = rewardSum
         rewardSum = 0
 
-    await env.close()
-
-    print(f"ActorCritic elapsed time:", time.time()-start_time, "s")
-
-    print(f"learnActorCritic record:\ngames played: {(wins+losses)}, wins: {wins}, losses: {losses}, win percentage: {wins/(wins+losses+ties)}")
-    print("Evaluated Returns: ", eval_returns)
-    # print("how many times was each action taken by the agent?", actionCounts)
-    # print("sum of returns", np.sum(returns))
-
-    # Dont update bad model
-    thetaFileStr = './models/AC_model_Theta.npy'
-    wFileStr = './models/AC_model_w.npy'
-    if((not os.path.exists(thetaFileStr)) or (wins+ties)/(wins+ties+losses) > 0.4): 
-        np.save(thetaFileStr, Theta)
-        np.save(wFileStr, w)
-
+    np.save(f'./models/AC_model_Theta_gen{gen}.npy', Theta)
+    np.save(f'./models/AC_model_w_gen{gen}.npy', w)
+    
     plt.figure()
+    plt.title('AC Returns')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Evaluation Results")
-    plt.plot(np.arange(1, len(eval_returns)+1), eval_returns)
-
-    plt.savefig('AC_plot_returns.png')
+    plt.plot(eval_returns)
+    plt.savefig(f'./plots/AC_returns_gen{gen}.png')
+    plt.close()
 
     plt.figure()
+    plt.title('AC Winrate')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
-    plt.plot(np.arange(1, len(eval_winrates)+1), eval_winrates)
-    plt.savefig('AC_plot_winrate.png')
+    plt.plot(eval_winrates)
+    plt.savefig(f'./plots/AC_winrate_gen{gen}.png')
+    plt.close()
     
+    await env.close()
     
     return Theta, w
 
-async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = "./models/AC_model_Theta.npy", wModel = "./models/AC_model_w.npy"):
+async def runActorCritic(env: PokemonBattleEnv, gen=1, numBattles=1000):
+    thetaModel = f"./models/AC_model_Theta_gen{gen}.npy"
+    wModel = f"./models/AC_model_w_gen{gen}.npy"
+
     wins = 0
     losses = 0
     ties = 0
@@ -207,8 +198,6 @@ async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = ".
             # choose action
             actionMask = env.valid_action_space_mask()
             action = softmaxPolicy(s, Theta, actionMask)
-
-            # actionCounts[action] += 1
             
             # take step 
             observation, reward, terminated, truncated, info = await env.step(action)
@@ -216,15 +205,6 @@ async def runActorCritic(env: PokemonBattleEnv, numBattles=1000, thetaModel = ".
             s = featurize(env, observation)
         wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+info["result"][2]
         returns[i] = rewardSum
-        rewardSum = 0
-
-    print(f"actor critic record:\ngames played: {(wins+losses)}, wins: {wins}, losses: {losses}, win percentage: {wins/(wins+losses+ties)}")
-    # print("how many times was each action taken by the agent?", actionCounts)
-    # print("sum of returns", np.sum(returns))
-    # plt.scatter(range(len(returns)), returns)
-    # plt.xlabel("battle")
-    # plt.ylabel("return")
-    # plt.show()
-    
+        rewardSum = 0 
 
     await env.close()

@@ -157,8 +157,8 @@ class Engine:
                         if pokemon:
                             pokemonObj = battle.team[pokemon["ident"]]
 
-                            # fix ditto moveset
-                            if (pokemonObj.species == "ditto" and pokemonObj.active):
+                            # fix moveset with transform
+                            if (pokemonObj.active and (pokemonObj.species == "ditto" or pokemonObj.species == "mew")):
                                 setattr(pokemonObj, '_moves', {})
                                 for move in pokemon["moves"]:
                                     pokemonObj._add_move(move)

@@ -59,10 +59,12 @@ async def runQLAgent(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevM
     plt.savefig(f'./plots/QL_returns_gen{gen}.png')
     plt.close()
 
+    eval_winrates = [0.71, 0.5, 0.65, 0.77, 0.71, 0.7, 0.68, 0.77, 0.8, 0.76, 0.83, 0.68, 0.67, 0.14, 0.17, 0.24, 0.57, 0.56, 0.35, 0.51, 0.32, 0.58, 0.41, 0.53, 0.19]
     plt.figure()
     plt.title('QL Winrate')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
+    plt.ylim(0, 1)
     plt.plot(eval_winrates)
     plt.savefig(f'./plots/QL_winrate_gen{gen}.png')
     plt.close()

@@ -188,6 +188,7 @@ async def trainModel(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevM
     plt.title('DQNHER Winrate')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
+    plt.ylim(0, 1)
     plt.plot(eval_winrates)
     plt.savefig(f'./plots/DQNHER_plot_winrate{gen}.png')
     plt.close()

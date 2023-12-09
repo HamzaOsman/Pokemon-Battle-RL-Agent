@@ -159,6 +159,7 @@ async def learnActorCritic(
     plt.title('AC Winrate')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
+    plt.ylim(0, 1)
     plt.plot(eval_winrates)
     plt.savefig(f'./plots/AC_winrate_gen{gen}.png')
     plt.close()

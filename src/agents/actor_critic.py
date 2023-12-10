@@ -148,7 +148,7 @@ async def learnActorCritic(
     np.save(f'./models/AC_model_w_gen{gen}.npy', w)
     
     plt.figure()
-    plt.title('AC Returns')
+    plt.title(f'AC Gen {gen} Returns')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Evaluation Results")
     plt.plot(eval_returns)
@@ -156,7 +156,7 @@ async def learnActorCritic(
     plt.close()
 
     plt.figure()
-    plt.title('AC Winrate')
+    plt.title(f'AC Gen {gen} Win Rate')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
     plt.ylim(0, 1)

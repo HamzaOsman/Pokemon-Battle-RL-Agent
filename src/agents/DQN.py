@@ -164,7 +164,7 @@ async def trainModel(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevM
         wins, losses, ties = wins+info["result"][0], losses+info["result"][1], ties+info["result"][2]
     
     plt.figure()
-    plt.title('DQN Returns')
+    plt.title(f'DQN Gen {gen} Returns')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Evaluation Results")
     plt.plot(eval_returns)
@@ -172,7 +172,7 @@ async def trainModel(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevM
     plt.close()
 
     plt.figure()
-    plt.title('DQN Winrate')
+    plt.title(f'DQN Gen {gen} Win Rate')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
     plt.ylim(0, 1)

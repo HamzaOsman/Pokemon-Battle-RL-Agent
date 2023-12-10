@@ -10,6 +10,7 @@ from poke_env.data import GenData
 import numpy as np
 import webbrowser
 import asyncio
+from poke_env.environment.battle import Battle
 
 # AUTO enum starts at 1
 NONE_ITEM = 0
@@ -109,9 +110,10 @@ class PokemonBattleEnv(gymnasium.Env):
         sideConditions_max = [4, 4, 4, 4, 3]
 
         game_min = [
-            NONE_WEATHER # Weather
+            NONE_WEATHER, # Weather
+            1 # Turn number
         ] + 2*sideConditions_min
-        game_max = [9] + 2*sideConditions_max
+        game_max = [9, 1000] + 2*sideConditions_max
                          
         features_min = np.array(activeFriendlyPokemon_min+(self.TEAM_SIZE-1)*friendlyPokemon_min+activeEnemyPokemon_min+(self.ENEMY_TEAM_SIZE-1)*enemyPokemon_min+game_min)
         features_max = np.array(activeFriendlyPokemon_max+(self.TEAM_SIZE-1)*friendlyPokemon_max+activeEnemyPokemon_max+(self.ENEMY_TEAM_SIZE-1)*enemyPokemon_max+game_max)
@@ -327,45 +329,71 @@ class PokemonBattleEnv(gymnasium.Env):
         # observation of game
         game = [
             NONE_WEATHER if not battleState.weather else list(battleState.weather.keys())[0].value,
+            battleState.turn,
             *playerSide,
             *opponentSide
         ]
 
         obs = np.array(activeFriendlyPokemon + friendlyPartyPokemon + activeEnemyPokemon + enemyPartyPokemon + game)
         return obs
-
-    def _determineReward(self):
-        # TODO: intermittent rewards? need to keep track of previous state to compare to
-        if not self.engine.battle._finished: 
-            return 0
-       
+        
+    def _measureNewState(self):
+        newBattleState = self.engine.battle
+        oldBattleState = self.engine.prevBattleState
         reward = 0
+
+        newAgentPkmn = newBattleState.active_pokemon
+        newOpponentPkmn = newBattleState.opponent_active_pokemon
+        oldAgentPkmn = oldBattleState.active_pokemon
+        oldOpponentPkmn = oldBattleState.opponent_active_pokemon
+
+        # + if your hp goes up, - if your hp goes down
+        # don't want to punish or reward swapping through this metric though
+        if newAgentPkmn.species == oldAgentPkmn.species:
+            reward += (newAgentPkmn.current_hp_fraction - oldAgentPkmn.current_hp_fraction) 
+        # + if their hp goes down, - if their hp goes up
+        if newOpponentPkmn.species == oldOpponentPkmn.species:
+            reward += (oldOpponentPkmn.current_hp_fraction- newOpponentPkmn.current_hp_fraction)
         
-        for name, friendly in self.engine.battle.team.items():
-            # punished for fainted friendly
-            if friendly.fainted:
-                reward -= 1
-            # reward proportional to keeping friendly alive
-            else:
-                reward += 1 * (friendly.current_hp_fraction)
-                
-        for name, enemy in self.engine.battle.opponent_team.items():
-            # rewarded for fainted enemy
-            if enemy.fainted:
-                reward += 1
-            # punishment proportional to how close to taking down each enemy
-            else:
-                reward -= 1 * (enemy.current_hp_fraction)
-        
-        reward -= self.ENEMY_TEAM_SIZE-len(self.engine.battle.opponent_team.items()) #Unseen full HP enemy pokemons 
+        # you defeat one of their pokemon
+        numDefeated = 0
+        for name, pokemon in newBattleState.opponent_team.items():
+            if pokemon.fainted:
+                numDefeated += 1
+        for name, pokemon in oldBattleState.opponent_team.items():
+            if pokemon.fainted:
+                numDefeated -= 1
+        reward += numDefeated
+
+        # one of your pokemon is defeated
+        numDefeated = 0
+        for name, pokemon in newBattleState.team.items():
+            if pokemon.fainted and not oldBattleState.team[name].fainted:
+                numDefeated += 1
+        reward -= numDefeated
+
+        return reward
+
+    def _determineReward(self):     
+        if not self.engine.battle._finished:
+            return -0.5 + self._measureNewState()
+
+        # final reward dependent on performance
+        reward = 0
+       
+        turnRatio = self.engine.battle.turn / 100
 
         if self.engine.battle.won is None:
-            reward -= 5
+            # tie :hmm:
+            reward -= 0
         elif self.engine.battle.won:
-            reward += 20
+            reward += 10
+            # win faster == bigger return
+            reward += 1/turnRatio
         else:
-            reward -= 20
-
+            reward -= 10
+            # lose faster == bigger punishment
+            reward -= 1/turnRatio
 
         return reward
     

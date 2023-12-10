@@ -52,7 +52,7 @@ async def runQLAgent(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevM
     np.save(f'./models/QL_model_gen{gen}.npy', W)
     
     plt.figure()
-    plt.title('QL Returns')
+    plt.title(f'QL Gen {gen} Returns')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Evaluation Results")
     plt.plot(eval_returns)
@@ -61,6 +61,7 @@ async def runQLAgent(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevM
 
     plt.figure()
     plt.title('QL Winrate')
+    plt.title(f'QL Gen {gen} Win Rate')
     plt.xlabel("Evaluation Steps")
     plt.ylabel("Win Rate %")
     plt.ylim(0, 1)

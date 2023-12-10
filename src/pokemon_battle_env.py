@@ -120,19 +120,30 @@ class PokemonBattleEnv(gymnasium.Env):
 
         self.observation_space = gymnasium.spaces.Box(low=features_min, high=features_max, dtype=np.int16)
 
-        # only 1 desired goal (enemy pkmn status = fainted) atm
-        self.goal_space = gymnasium.spaces.Box(low=np.array([Status.FNT.value]*self.ENEMY_TEAM_SIZE), high=np.array([Status.FNT.value]*self.ENEMY_TEAM_SIZE), dtype=np.int16)
-        
-        self.goal_featurizer = lambda g : (g-NONE_STATUS) / (7-NONE_STATUS)
+        self.goal_space = gymnasium.spaces.Box(low=np.array([1]*self.TEAM_SIZE+[Status.FNT.value, 0]*self.ENEMY_TEAM_SIZE+[10]), 
+                                               high=np.array([100]*self.TEAM_SIZE+[Status.FNT.value, 0]*self.ENEMY_TEAM_SIZE+[30]), dtype=np.int16)
+
+        self.goal_featurizer = lambda g : (g-([0]*self.TEAM_SIZE+[NONE_STATUS, 0]*self.ENEMY_TEAM_SIZE+[1])) / ([100-0]*self.TEAM_SIZE+[7-NONE_STATUS, 100-0]*self.ENEMY_TEAM_SIZE+[1000-1])
 
         def _goal_mapping(state):
+            friendly_hp_indices = []
             enemy_status_indices = []
+            enemy_hp_indices = []
+            offset = len(boosts_min)+5
+            friendly_hp_indices.append(offset)
+            for i in range(self.TEAM_SIZE-1):
+                offset += len(friendlyPokemon_min)
+                friendly_hp_indices.append(offset)
             offset = len(activeFriendlyPokemon_min+(self.TEAM_SIZE-1)*friendlyPokemon_min+boosts_min)+5
             enemy_status_indices.append(offset)
+            enemy_hp_indices.append(offset+1)
             for i in range(self.ENEMY_TEAM_SIZE-1):
                 offset += len(enemyPokemon_min)
                 enemy_status_indices.append(offset)
-            return state[:, enemy_status_indices]
+                enemy_hp_indices.append(offset+1)
+            turn_index = offset+len(enemyPokemon_min)-4
+            goal_feature_indices = friendly_hp_indices + enemy_status_indices + enemy_hp_indices + [turn_index]
+            return state[:, goal_feature_indices]
 
         self.goal_mapping = _goal_mapping
 

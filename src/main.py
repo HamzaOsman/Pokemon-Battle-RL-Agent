@@ -220,11 +220,11 @@ async def runExperiments(algos, numGens=2, numBattles=1000):
     print("running eXperiments")
 
     # DQN and AC
-    gammas = [0.9, 0.95, 0.99]
+    gammas = [0.99, 0.95, 0.9]
 
     # DQN
     lrs = [1e-6, 1e-5, 1e-4]
-    epsilons = [0.25, 0.5, 0.9]
+    epsilons = [0.9, 0.5, 0.25]
     
     # AC
     actorLRs = [0.0005, 0.005, 0.05]

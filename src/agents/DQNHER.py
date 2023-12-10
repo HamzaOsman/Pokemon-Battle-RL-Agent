@@ -41,9 +41,9 @@ class DQNHER(nn.Module):
 
     def __init__(self, n_observations, n_actions):
         super(DQNHER, self).__init__()
-        self.layer1 = nn.Linear(n_observations, 128)
-        self.layer2 = nn.Linear(128, 128)
-        self.layer3 = nn.Linear(128, n_actions)
+        self.layer1 = nn.Linear(n_observations, 64)
+        self.layer2 = nn.Linear(64, 64)
+        self.layer3 = nn.Linear(64, n_actions)
 
     def forward(self, x):
         x = F.relu(self.layer1(x))
@@ -57,7 +57,8 @@ async def trainModel(env: PokemonBattleEnv,
                      learnFromPrevModel=False,
                      GAMMA = 0.99,
                      EPS_START = 0.9,
-                     LR = 1e-4):  
+                     LR = 1e-4, 
+                     K_FUTURE = 4):  
 
     def optimize_model():
         if len(memory) < BATCH_SIZE:
@@ -102,13 +103,14 @@ async def trainModel(env: PokemonBattleEnv,
         policy_net = DQNHER(n_state_observations+n_goal_observations, n_actions).to(device)
         target_net = DQNHER(n_state_observations+n_goal_observations, n_actions).to(device)
         target_net.load_state_dict(policy_net.state_dict())
+    
+    print("DQNHERgen", gen, "gamma, lr, epsilon:", GAMMA, LR, EPS_START )
         
     #Hyper parameters
     BATCH_SIZE = 128
     EPS_END = 0.05
     EPS_DECAY = max_episode*2
     TAU = 0.005
-    K_FUTURE = 4
     
     optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
     memory = ReplayMemory(10000)
@@ -137,7 +139,7 @@ async def trainModel(env: PokemonBattleEnv,
             action = select_action(env, state_goal_pair, policy_net, EPS_START, EPS_END, EPS_DECAY, steps_done)
             steps_done+=1
             next_state, _, terminated, truncated, info = await env.step(action.item())
-            reward = compute_reward(env.goal_mapping(state), goal)
+            reward = compute_reward(env, env.goal_mapping(state), goal)
             reward = torch.tensor([reward], device=device)
             next_state = featurize(env, next_state)
             next_state = torch.tensor(next_state, dtype=torch.float32, device=device).unsqueeze(0)
@@ -167,7 +169,7 @@ async def trainModel(env: PokemonBattleEnv,
             future_transitions = random.choices(episode[j:], k=K_FUTURE) # randomly sample k future states as new goals
             for future_transition in future_transitions:
                 new_goal = env.goal_mapping(future_transition[2])
-                reward = compute_reward(env.goal_mapping(next_state), new_goal)
+                reward = compute_reward(env, env.goal_mapping(next_state), new_goal)
                 reward = torch.tensor([reward], device=device)
                 memory.push(state, action, next_state, reward, new_goal, done)
 
@@ -204,9 +206,18 @@ async def trainModel(env: PokemonBattleEnv,
     await env.close()
 
 # TODO: better reward structure
-def compute_reward(achieved_state, desired_state):
+def compute_reward(env, achieved_state, desired_state):
     achieved_state, desired_state = achieved_state.to(device), desired_state.to(device)
-    if torch.sum(torch.eq(achieved_state, desired_state)) == desired_state.size(dim=1):
+    
+    friendly_goal = achieved_state[:, :env.TEAM_SIZE] > desired_state[:, :env.TEAM_SIZE] # friendly team alive
+    enemy_goal = achieved_state[:, env.TEAM_SIZE:-1] == desired_state[:, env.TEAM_SIZE:-1] # opponent team dead
+    turn_goal = achieved_state[:,-1] <= desired_state[:, -1] # played efficiently
+
+    # turn_tolerance = 3
+    # turn_tolerance = (turn_tolerance-1) / (1000-1)
+    # turn_within_tolerance = desired_state[:, -1]-turn_tolerance <= achieved_state[:,-1] <= desired_state[:, -1]+turn_tolerance 
+
+    if (torch.any(friendly_goal) and torch.all(enemy_goal)):
         reward = 0
     else:
         reward = -1

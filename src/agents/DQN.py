@@ -48,7 +48,13 @@ class DQN(nn.Module):
         x = F.relu(self.layer2(x))
         return self.layer3(x)
 
-async def trainModel(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevModel=False):  
+async def trainModel(env: PokemonBattleEnv, 
+                     gen=1, 
+                     max_episode=1, 
+                     learnFromPrevModel=False,
+                     GAMMA = 0.99,
+                     EPS_START = 0.9,
+                     LR = 1e-4):  
     def optimize_model():
         if len(memory) < BATCH_SIZE:
             return
@@ -103,13 +109,9 @@ async def trainModel(env: PokemonBattleEnv, gen=1, max_episode=1, learnFromPrevM
         
     #Hyper parameters
     BATCH_SIZE = 128
-    GAMMA = 0.99
-    EPS_START = 0.9
     EPS_END = 0.05
     EPS_DECAY = max_episode*2
-    TAU = 0.005
-    LR = 1e-4
-    
+
     optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
     memory = ReplayMemory(10000)
     steps_done = 0

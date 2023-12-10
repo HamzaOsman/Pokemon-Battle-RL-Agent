@@ -44,6 +44,11 @@ async def main():
     elif agentMode == "test":
         numBattles = int(config.get("Agent Configuration", "num_episodes"))
         await testAgents(agentAlgos, numBattles)
+    elif agentMode == "experiment":
+        numGens = int(config.get("Agent Configuration", "num_generations"))
+        numBattles = int(config.get("Agent Configuration", "num_episodes"))
+        await runExperiments(agentAlgos, numGens, numBattles)
+        
 
 async def buildEnv(algoName: str, agentSocket: websockets.WebSocketClientProtocol = None, opponentSocket: websockets.WebSocketClientProtocol = None):
     agentTeamSize = int(config.get("Battle Configuration", "agent_team_size"))
@@ -205,6 +210,61 @@ async def testAgents(algos, numBattles=200):
             createTask(algo2, agent2)
     
     await asyncio.gather(*tasks)
+
+
+async def runExperiments(algos, numGens=2, numBattles=1000):
+    evaluate_every = int(config.get("Agent Configuration", "evaluate_every"))
+    evaluation_runs = int(config.get("Agent Configuration", "evaluation_runs"))
+    websocketUrl = "ws://localhost:8000/showdown/websocket"
+    
+    print("running eXperiments")
+
+    # DQN and AC
+    gammas = [0.9, 0.95, 0.99]
+
+    # DQN
+    lrs = [1e-6, 1e-5, 1e-4]
+    epsilons = [0.25, 0.5, 0.9]
+    
+    # AC
+    actorLRs = [0.0005, 0.005, 0.05]
+    criticLRs = [0.0005, 0.005, 0.05]
+
+    for gen in range(1, numGens+1):
+        print("gen", gen)
+
+        if("DQN" in algos):
+            print("doing dqn!")
+            for gamma in gammas:
+                for lr in lrs:
+                    for epsilon in epsilons:
+                        tasks = []
+                        dqnAgentEnv, dqnOpponentEnv = await buildEnv(f"DQN", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
+                        tasks.append(DQN.trainModel(dqnAgentEnv, gen, numBattles, GAMMA=gamma, LR=lr, EPS_START=epsilon))
+                        tasks.append(runRandomAgent(dqnOpponentEnv, numBattles+((numBattles//evaluate_every)*evaluation_runs)))
+                        await asyncio.gather(*tasks)
+
+        if("AC" in algos):
+            print("doing AC!")
+            for gamma in gammas:
+                for actorLR in actorLRs:
+                    for criticLR in criticLRs:
+                        tasks = []
+                        acAgentEnv, acOpponentEnv = await buildEnv(f"AC", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))                        
+                        tasks.append(AC.learnActorCritic(acAgentEnv, gen, numBattles, gamma, actorLR, criticLR, learnFromPrevModel=False))
+                        tasks.append(runRandomAgent(acOpponentEnv, numBattles+((numBattles//evaluate_every)*evaluation_runs)))
+                        await asyncio.gather(*tasks)
+
+        if("DQNHER" in algos):
+            for gamma in gammas:
+                for lr in lrs:
+                    for epsilon in epsilons:
+                        tasks = []
+                        dqnAgentEnv, dqnOpponentEnv = await buildEnv(f"DQNHER", await websockets.connect(websocketUrl), await websockets.connect(websocketUrl))
+                        tasks.append(DQNHER.trainModel(dqnAgentEnv, gen, numBattles, GAMMA=gamma, LR=lr, EPS_START=epsilon))
+                        tasks.append(runRandomAgent(dqnOpponentEnv, numBattles+((numBattles//evaluate_every)*evaluation_runs)))
+                        await asyncio.gather(*tasks)
+
 
 if __name__ == "__main__":
     start_time = time.time()

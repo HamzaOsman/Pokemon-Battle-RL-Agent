@@ -111,6 +111,7 @@ async def trainModel(env: PokemonBattleEnv,
     BATCH_SIZE = 128
     EPS_END = 0.05
     EPS_DECAY = max_episode*2
+    TAU = 0.005
 
     optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
     memory = ReplayMemory(10000)

@@ -1,5 +1,7 @@
 import asyncio
 from logging import Logger
+import random
+import re
 import orjson
 from poke_env import ShowdownException
 from poke_env.player import BattleOrder
@@ -16,6 +18,8 @@ class Engine:
 
     def __init__(self, agent: PlayerConfig, opponentUsername: str, battleFormat: str, socket: websockets.WebSocketClientProtocol = None):
         self.battle: Battle = None
+        self.prevBattleState: Battle = None
+        self.prevBattleMessages = []
         self.agent = agent
         self.orderedPartyPokemon = []
         self.opponentUsername = opponentUsername
@@ -31,12 +35,15 @@ class Engine:
         
     async def _waitUntilChallenge(self):
         async for message in self.socket:
+
             messageSplit = message.split("|")
             if(messageSplit[1] == "pm" and messageSplit[4].startswith("/challenge")):
                 return
             
     def resetBattle(self):
         self.battle = None
+        self.prevBattleState = None
+        self.prevBattleMessages = []
         self.orderedPartyPokemon = []
 
     async def _sendMessage(self, message: str, room: str = ""):
@@ -69,7 +76,9 @@ class Engine:
 
             # ignore non battle messages, and anything else in the socket before the initialization
             if(messageSplit[0].startswith(">battle") and isInit):
-                self._handle_battle_message(message)
+                # on init only battle will have state, prev battle will still be None but we now have the prev msg
+                self._handle_battle_message(message, True)
+                self.prevBattleMessages.append(message)
 
                 # p2, the accepter, gets displayed last
                 p2User = self.opponentUsername if self.agent.isChallenger else self.agent.username
@@ -77,6 +86,11 @@ class Engine:
                     return
 
     async def _parseBattle(self):
+        # parse prev battle from stored prev messages
+        for prevMsg in self.prevBattleMessages:
+            self._handle_battle_message(prevMsg, False)
+        self.prevBattleMessages = []
+
         moveMade = True
         i = 0
         while i < 2:
@@ -86,7 +100,10 @@ class Engine:
             if(messageSplit[0].startswith(">battle") and messageSplit[1] not in {"j", "l"}):
                 i += 1
                 try:
-                    self._handle_battle_message(message)
+                    # parse the current battle from this message, add this message to prev
+                    self._handle_battle_message(message, True)
+                    self.prevBattleMessages.append(message)
+                    
                 except:
                     break
 
@@ -97,7 +114,6 @@ class Engine:
     async def doAction(self, action: BattleOrder) -> Battle:
         roomId = self.battle.battle_tag
         agentMsg = action.message
-
         '''
         If a ditto transforms into a species which you have in your party, showdown is unable ot switch from ditto to that
         pokemon using the species name.
@@ -125,7 +141,7 @@ class Engine:
         url          = {https://github.com/hsahovic/poke-env}
     }
     '''
-    def _handle_battle_message(self, message: str) -> None:  # pragma: no cover
+    def _handle_battle_message(self, message: str, updateCurrent = True) -> Battle:  # pragma: no cover
         # Battle messages can be multiline
         split_messages = [m.split("|") for m in message.split("\n")]
         battle: Battle = None
@@ -137,8 +153,7 @@ class Engine:
             battle_info = split_messages[0][0].split("-")
             battle = self._create_battle(battle_info)
         else:
-            battle = self.battle
-
+            battle = self.battle if updateCurrent else self.prevBattleState
 
         battle.trapped = False
         for split_message in split_messages[1:]:
@@ -151,7 +166,8 @@ class Engine:
                     battle._parse_request(request)
                     
                     side = request["side"]
-                    self.orderedPartyPokemon = []
+                    if updateCurrent:
+                        self.orderedPartyPokemon = []
                     # comes from pokemon showdown, true order
                     for pokemon in side["pokemon"]:
                         if pokemon:
@@ -163,7 +179,7 @@ class Engine:
                                 for move in pokemon["moves"]:
                                     pokemonObj._add_move(move)
                             
-                            if not pokemonObj.active:
+                            if updateCurrent and not pokemonObj.active:
                                 self.orderedPartyPokemon.append(pokemonObj)
 
             elif split_message[1] == "win" or split_message[1] == "tie":
@@ -182,13 +198,17 @@ class Engine:
                     battle.trapped = True
             else:
                 battle._parse_message(split_message)
-
-                # handle case where switch happens but orderedPartyPokemon didnt get updated
-                i, activePokemon = next(((i, pokemon) for i, pokemon in enumerate(self.orderedPartyPokemon) if pokemon.species == battle.active_pokemon.species), (None, None))
-                if (activePokemon is not None):
-                    prevActivePokemo = next((pokemon for pokemon in battle.team.values() if pokemon not in self.orderedPartyPokemon))
-                    self.orderedPartyPokemon[i] = prevActivePokemo
-        self.battle = battle
+                if updateCurrent:
+                    # handle case where switch happens but orderedPartyPokemon didnt get updated
+                    i, activePokemon = next(((i, pokemon) for i, pokemon in enumerate(self.orderedPartyPokemon) if pokemon.species == battle.active_pokemon.species), (None, None))
+                    if (activePokemon is not None):
+                        prevActivePokemo = next((pokemon for pokemon in battle.team.values() if pokemon not in self.orderedPartyPokemon))
+                        self.orderedPartyPokemon[i] = prevActivePokemo
+        
+        if updateCurrent:
+            self.battle = battle
+        else:
+            self.prevBattleState = battle
         
     def _create_battle(self, split_message: List[str]) -> Battle:
         """Returns battle object corresponding to received message.
